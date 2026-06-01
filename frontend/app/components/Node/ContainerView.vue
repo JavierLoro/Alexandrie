@@ -152,7 +152,7 @@ async function handleFileUpload(event: Event) {
       const raw = await file.text();
       const isHtml = /\.html?$/i.test(file.name);
       const { content, content_compiled } = isHtml ? processHtmlUpload(raw, sanitize) : { content: raw, content_compiled: compile(raw) };
-      await nodesStore.post({ name, content, content_compiled, role: 3, accessibility: 1, parent_id: props.parent.id });
+      await nodesStore.post({ name, content, content_compiled, role: 3, accessibility: 1, parent_id: props.parent.id, ...(isHtml ? { metadata: { render: 'html' as const } } : {}) });
       ok++;
     } catch (e) {
       console.error('Failed to import', file.name, e);

@@ -22,6 +22,7 @@ export interface DB_Node {
     original_path?: string;
     transformed_path?: string;
     drawio?: boolean;
+    render?: 'html'; // documento renderizado como HTML autónomo en iframe
   };
   created_timestamp: number;
   updated_timestamp: number;

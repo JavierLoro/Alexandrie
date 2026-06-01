@@ -74,9 +74,10 @@ const scrollSync = createScrollSync({
   getPreview: () => markdownPreview.value,
 });
 
+const isHtmlDoc = props.doc?.metadata?.render === 'html';
 const document = ref<Partial<Node>>({
   ...props.doc,
-  content_compiled: compile(props.doc?.content || ''),
+  content_compiled: isHtmlDoc ? props.doc?.content_compiled : compile(props.doc?.content || ''),
 });
 
 const commands = createCommands({
@@ -170,7 +171,7 @@ function autoSaveConditional() {
 const updateDocumentContent = debounce(() => {
   const content = editorView.value?.state.doc.toString() || '';
   document.value.content = content;
-  document.value.content_compiled = compile(content);
+  document.value.content_compiled = isHtmlDoc ? document.value.content_compiled : compile(content);
 }, 100);
 
 const save = debounce(() => {

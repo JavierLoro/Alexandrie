@@ -143,6 +143,7 @@ async function analyzeFile() {
             access: 2,
             content,
             content_compiled,
+            ...(isHtml ? { metadata: { render: 'html' as const } } : {}),
             parent_id: parentId,
             created_timestamp: now,
             updated_timestamp: now,
