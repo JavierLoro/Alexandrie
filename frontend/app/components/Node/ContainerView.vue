@@ -35,10 +35,10 @@
           <Icon name="delete" display="lg" />
           <p class="hint-tooltip">{{ t('common.actions.delete') }}</p>
         </NuxtLink>
-        <input ref="fileInput" type="file" accept=".md" multiple style="display:none" @change="handleFileUpload" />
+        <input ref="fileInput" type="file" accept=".md,.html,.htm" multiple style="display:none" @change="handleFileUpload" />
         <NuxtLink v-if="parent && nodesStore.hasPermissions(parent, 2)" class="btn-icon no-mobile" @click="() => fileInput?.click()">
           <Icon name="import" display="lg" />
-          <p class="hint-tooltip">Subir .md</p>
+          <p class="hint-tooltip">Subir .md/.html</p>
         </NuxtLink>
         <span class="doc-count no-mobile">{{ filteredNodes.length != nodes.length ? `${filteredNodes.length} /` : '' }} {{ nodes.length }}</span>
         <ViewSelection v-model="view" :show-kanban="true" />
@@ -86,10 +86,12 @@ import ResetBoardModal from '../Kanban/ResetBoard.modal.vue';
 import type { ViewMode } from '~/components/ViewSelection.vue';
 import type { Node } from '~/stores';
 import compile from '~/helpers/markdown';
+import { processHtmlUpload } from '~/helpers/html';
 
 const props = defineProps<{ parent?: Node; nodes: Node[]; parentId?: string }>();
 
 const nodesStore = useNodesStore();
+const preferences = usePreferencesStore();
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -141,13 +143,16 @@ async function handleFileUpload(event: Event) {
   const files = input.files ? Array.from(input.files) : [];
   if (!files.length || !props.parent) return;
 
+  const sanitize = preferences.get('htmlUploadSanitize').value;
   let ok = 0;
   const failed: string[] = [];
   for (const file of files) {
-    const name = file.name.endsWith('.md') ? file.name.slice(0, -3) : file.name;
+    const name = file.name.replace(/\.(html?|md)$/i, '');
     try {
-      const content = await file.text();
-      await nodesStore.post({ name, content, content_compiled: compile(content), role: 3, accessibility: 1, parent_id: props.parent.id });
+      const raw = await file.text();
+      const isHtml = /\.html?$/i.test(file.name);
+      const { content, content_compiled } = isHtml ? processHtmlUpload(raw, sanitize) : { content: raw, content_compiled: compile(raw) };
+      await nodesStore.post({ name, content, content_compiled, role: 3, accessibility: 1, parent_id: props.parent.id });
       ok++;
     } catch (e) {
       console.error('Failed to import', file.name, e);
@@ -159,7 +164,7 @@ async function handleFileUpload(event: Event) {
     notifications.add({
       type: 'success',
       title: ok > 1 ? 'Documentos importados' : 'Documento importado',
-      message: ok > 1 ? `${ok} documentos añadidos correctamente` : `"${files[0].name.replace(/\.md$/, '')}" añadido correctamente`,
+      message: ok > 1 ? `${ok} documentos añadidos correctamente` : `"${files[0].name.replace(/\.(html?|md)$/i, '')}" añadido correctamente`,
     });
   }
   if (failed.length) {

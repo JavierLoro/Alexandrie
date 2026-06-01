@@ -60,12 +60,14 @@ import { handleBackupFile } from '~/helpers/backups';
 import type { Manifest } from '~/helpers/backups/types';
 import type { DB_Node, ImportJob } from '~/stores/db_strustures';
 import compile from '~/helpers/markdown';
+import { processHtmlUpload } from '~/helpers/html';
 
 definePageMeta({ breadcrumb: { i18n: 'import.meta.breadcrumb' } });
 
 const { t } = useI18nT();
 const nodesStore = useNodesStore();
 const notifications = useNotifications();
+const preferences = usePreferencesStore();
 
 // State
 const step = ref<'select' | 'preview'>('select');
@@ -115,26 +117,33 @@ async function analyzeFile() {
   isAnalyzing.value = true;
   analyzeError.value = '';
 
-  const mdFiles = selectedFiles.value.filter(f => f.name.endsWith('.md'));
-  const backupFiles = selectedFiles.value.filter(f => !f.name.endsWith('.md'));
+  const isDoc = (f: File) => /\.(md|html?)$/i.test(f.name);
+  const docFiles = selectedFiles.value.filter(isDoc);
+  const backupFiles = selectedFiles.value.filter(f => !isDoc(f));
 
   try {
-    if (mdFiles.length) {
-      // One or many markdown files — import directly, no preview step.
+    if (docFiles.length) {
+      // One or many .md/.html files — import directly, no preview step.
       // Precompile content_compiled so the rendered preview shows without opening the editor.
       const now = Date.now();
-      const markdownNodes: DB_Node[] = await Promise.all(
-        mdFiles.map(async (file): Promise<DB_Node> => {
-          const content = await file.text();
+      const sanitize = preferences.get('htmlUploadSanitize').value;
+      const defaultFolder = preferences.get('defaultUploadFolder').value;
+      const parentId = defaultFolder && nodesStore.nodes.has(defaultFolder) ? defaultFolder : undefined;
+      const docNodes: DB_Node[] = await Promise.all(
+        docFiles.map(async (file): Promise<DB_Node> => {
+          const raw = await file.text();
+          const isHtml = /\.html?$/i.test(file.name);
+          const { content, content_compiled } = isHtml ? processHtmlUpload(raw, sanitize) : { content: raw, content_compiled: compile(raw) };
           return {
             id: '0',
             user_id: '',
-            name: file.name.slice(0, -3),
+            name: file.name.replace(/\.(html?|md)$/i, ''),
             role: 3,
             accessibility: 1,
             access: 2,
             content,
-            content_compiled: compile(content),
+            content_compiled,
+            parent_id: parentId,
             created_timestamp: now,
             updated_timestamp: now,
           };
@@ -142,21 +151,21 @@ async function analyzeFile() {
       );
       const job = ref<ImportJob>({
         status: 'pending',
-        toCreate: markdownNodes.length,
+        toCreate: docNodes.length,
         toUpdate: 0,
         created: [],
         updated: [],
         failures: 0,
       });
-      await nodesStore.importMultipleNodes({ toCreate: markdownNodes, toUpdate: [] }, job);
+      await nodesStore.importMultipleNodes({ toCreate: docNodes, toUpdate: [] }, job);
       const ok = job.value.created.length;
       notifications.add({
         type: job.value.failures ? 'warning' : 'success',
         title: t('import.notifications.importCompleteTitle'),
         message:
-          mdFiles.length > 1
-            ? `${ok}/${mdFiles.length} documentos importados correctamente`
-            : `"${markdownNodes[0].name}" importado correctamente`,
+          docFiles.length > 1
+            ? `${ok}/${docFiles.length} documentos importados correctamente`
+            : `"${docNodes[0].name}" importado correctamente`,
       });
       selectedFiles.value = [];
       dropComponent.value?.reset();

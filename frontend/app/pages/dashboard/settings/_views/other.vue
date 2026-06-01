@@ -44,6 +44,12 @@ const options = computed<Array<{ label: string; options: InterfaceOption[] }>>((
         key: 'defaultUploadFolder',
         choices: categories,
       },
+      {
+        label: t('settings.other.htmlUploadSanitize'),
+        description: t('settings.other.htmlUploadSanitizeDesc'),
+        type: 'toggle',
+        key: 'htmlUploadSanitize',
+      },
     ],
   },
   {
