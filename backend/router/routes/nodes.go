@@ -17,6 +17,7 @@ func Nodes(app *app.App, router *gin.RouterGroup) {
 	node.GET("/public/:nodeId", utils.WP(nodeCtrl.GetPublicNode))
 	node.GET("/search", middlewares.Auth(), utils.WP(nodeCtrl.SearchNodes))
 	node.GET("/shared/:userId", middlewares.Auth(), utils.WP(nodeCtrl.GetSharedNodes))
+	node.GET("/me", middlewares.Auth(), utils.WP(nodeCtrl.GetMyNodes))
 	node.GET("/:nodeId", middlewares.Auth(), utils.WP(nodeCtrl.GetNode))
 	node.GET("/:nodeId/permissions", middlewares.Auth(), utils.WP(permCtrl.GetNodePermissions))
 	node.GET("/user/:userId", middlewares.Auth(), utils.WP(nodeCtrl.GetNodes))
@@ -25,6 +26,7 @@ func Nodes(app *app.App, router *gin.RouterGroup) {
 	node.POST("/:nodeId/permissions", middlewares.Auth(), utils.WP(permCtrl.CreatePermission))
 
 	node.PUT("/:nodeId", middlewares.Auth(), utils.WP(nodeCtrl.UpdateNode))
+	node.PATCH("/:nodeId", middlewares.Auth(), utils.WP(nodeCtrl.PatchNode))
 
 	node.PATCH("/:nodeId/permissions/:permId", middlewares.Auth(), utils.WP(permCtrl.UpdatePermission))
 

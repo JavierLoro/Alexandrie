@@ -22,6 +22,7 @@ type NodeService interface {
 	UpdateNode(ctx context.Context, nodeId types.Snowflake, node *models.Node) (*models.Node, error)
 	DeleteNode(ctx context.Context, nodeId types.Snowflake) error
 	SearchNodes(ctx context.Context, query string, includeContent bool, limit int) ([]*models.NodeSearchResult, error)
+	PatchNode(ctx context.Context, nodeId types.Snowflake, fields map[string]any) (*models.Node, error)
 }
 
 type nodeService struct {
@@ -232,7 +233,7 @@ func (s *nodeService) UpdateNode(ctx context.Context, nodeId types.Snowflake, no
 	updatedNode := &models.Node{
 		Id:               nodeId,
 		ParentId:         safeParentId,
-		UserId:           node.UserId,
+		UserId:           dbNode.UserId,
 		Name:             node.Name,
 		Description:      &description,
 		Role:             node.Role,
@@ -316,4 +317,71 @@ func getNodeSize(node *models.Node) *int64 {
 	}
 
 	return &size
+}
+
+func (s *nodeService) PatchNode(ctx context.Context, nodeId types.Snowflake, fields map[string]any) (*models.Node, error) {
+	dbNode, err := s.nodeRepo.GetByID(nodeId)
+	if err != nil {
+		return nil, err
+	}
+	if dbNode == nil {
+		return nil, permissions.ErrNotFound
+	}
+
+	// Apply only the fields present in the JSON body
+	if v, ok := fields["name"]; ok {
+		if str, ok := v.(string); ok {
+			dbNode.Name = str
+		}
+	}
+	if v, ok := fields["role"]; ok {
+		if f, ok := v.(float64); ok {
+			dbNode.Role = int(f)
+		}
+	}
+	if v, ok := fields["description"]; ok {
+		if v == nil {
+			dbNode.Description = nil
+		} else if str, ok := v.(string); ok {
+			dbNode.Description = &str
+		}
+	}
+	if v, ok := fields["tags"]; ok {
+		if v == nil {
+			dbNode.Tags = nil
+		} else if str, ok := v.(string); ok {
+			dbNode.Tags = &str
+		}
+	}
+	if v, ok := fields["content"]; ok {
+		if v == nil {
+			dbNode.Content = nil
+		} else if str, ok := v.(string); ok {
+			dbNode.Content = &str
+		}
+	}
+	if v, ok := fields["content_compiled"]; ok {
+		if v == nil {
+			dbNode.ContentCompiled = nil
+		} else if str, ok := v.(string); ok {
+			dbNode.ContentCompiled = &str
+		}
+	}
+	if v, ok := fields["accessibility"]; ok {
+		if f, ok := v.(float64); ok {
+			a := int(f)
+			dbNode.Accessibility = &a
+		}
+	}
+	if v, ok := fields["parent_id"]; ok {
+		if v == nil {
+			dbNode.ParentId = nil
+		} else if str, ok := v.(string); ok {
+			if pid, err2 := types.SnowflakeFromString(str); err2 == nil {
+				dbNode.ParentId = pid
+			}
+		}
+	}
+
+	return s.UpdateNode(ctx, nodeId, dbNode)
 }

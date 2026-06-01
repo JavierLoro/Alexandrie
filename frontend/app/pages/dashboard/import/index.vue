@@ -10,16 +10,16 @@
         <NuxtLink to="/dashboard/settings?p=backup" style="color: var(--primary)">{{ t('import.meta.settingsLink') }}</NuxtLink
         >.
       </p>
-      <AppDrop ref="dropComponent" @select="handleFileSelect as (file: File) => void" />
+      <AppDrop ref="dropComponent" :multiple="true" :max-files="50" @select="handleFileSelect" />
       <div class="submit">
-        <AppButton type="primary" :disabled="!selectedFile || isAnalyzing" @click="analyzeFile">
+        <AppButton type="primary" :disabled="!selectedFiles.length || isAnalyzing" @click="analyzeFile">
           {{ isAnalyzing ? t('import.steps.select.analyzing') : t('import.steps.select.startImport') }}
         </AppButton>
       </div>
       <p v-if="analyzeError" class="error-text">{{ analyzeError }}</p>
     </div>
 
-    <!-- Step 2: Preview & Import -->
+    <!-- Step 2: Preview & Import (backup files only) -->
     <template v-if="step === 'preview' && manifest">
       <!-- Backup Info Card -->
       <ImportHeader :manifest="manifest" :reset-import="resetImport" />
@@ -68,7 +68,8 @@ const notifications = useNotifications();
 
 // State
 const step = ref<'select' | 'preview'>('select');
-const selectedFile = ref<File>();
+const selectedFiles = ref<File[]>([]);
+const dropComponent = ref<{ reset: () => void } | null>(null);
 const isAnalyzing = ref(false);
 const analyzeError = ref('');
 
@@ -102,34 +103,74 @@ const unchangedCount = computed(() => {
 });
 
 // Methods
-const handleFileSelect = (file?: File) => {
-  selectedFile.value = file;
+const handleFileSelect = (payload?: File | File[] | null) => {
+  selectedFiles.value = payload ? (Array.isArray(payload) ? payload : [payload]) : [];
   analyzeError.value = '';
 };
 
 async function analyzeFile() {
-  if (!selectedFile.value) return;
+  if (!selectedFiles.value.length) return;
 
   isAnalyzing.value = true;
   analyzeError.value = '';
 
+  const mdFiles = selectedFiles.value.filter(f => f.name.endsWith('.md'));
+  const backupFiles = selectedFiles.value.filter(f => !f.name.endsWith('.md'));
+
   try {
-    const result = await handleBackupFile(selectedFile.value);
-    manifest.value = result.manifest;
-    localData.value = result.localData;
-
-    if (result.documents?.length) {
-      backupDocuments.value = result.documents;
-      const { toCreate: create, toUpdate: update } = nodesStore.prepareImport(result.documents);
-      toCreate.value = create;
-      toUpdate.value = update;
+    if (mdFiles.length) {
+      // One or many markdown files — import directly, no preview needed
+      const now = Date.now();
+      const markdownNodes: DB_Node[] = await Promise.all(
+        mdFiles.map(async (file): Promise<DB_Node> => ({
+          id: '0',
+          user_id: '',
+          name: file.name.slice(0, -3),
+          role: 3,
+          accessibility: 1,
+          access: 2,
+          content: await file.text(),
+          created_timestamp: now,
+          updated_timestamp: now,
+        })),
+      );
+      const job = ref<ImportJob>({
+        status: 'pending',
+        toCreate: markdownNodes.length,
+        toUpdate: 0,
+        created: [],
+        updated: [],
+        failures: 0,
+      });
+      await nodesStore.importMultipleNodes({ toCreate: markdownNodes, toUpdate: [] }, job);
+      const ok = job.value.created.length;
+      notifications.add({
+        type: job.value.failures ? 'warning' : 'success',
+        title: t('import.notifications.importCompleteTitle'),
+        message:
+          mdFiles.length > 1
+            ? `${ok}/${mdFiles.length} documentos importados correctamente`
+            : `"${markdownNodes[0].name}" importado correctamente`,
+      });
+      selectedFiles.value = [];
+      dropComponent.value?.reset();
     } else {
-      backupDocuments.value = [];
-      toCreate.value = [];
-      toUpdate.value = [];
+      // Backup file — single-file preview flow
+      const result = await handleBackupFile(backupFiles[0]);
+      manifest.value = result.manifest;
+      localData.value = result.localData;
+      if (result.documents?.length) {
+        backupDocuments.value = result.documents;
+        const { toCreate: create, toUpdate: update } = nodesStore.prepareImport(result.documents);
+        toCreate.value = create;
+        toUpdate.value = update;
+      } else {
+        backupDocuments.value = [];
+        toCreate.value = [];
+        toUpdate.value = [];
+      }
+      step.value = 'preview';
     }
-
-    step.value = 'preview';
   } catch (e) {
     analyzeError.value = e instanceof Error ? e.message : 'Failed to analyze backup file';
   } finally {
@@ -139,7 +180,8 @@ async function analyzeFile() {
 
 function resetImport() {
   step.value = 'select';
-  selectedFile.value = undefined;
+  selectedFiles.value = [];
+  dropComponent.value?.reset();
   manifest.value = null;
   backupDocuments.value = [];
   toCreate.value = [];

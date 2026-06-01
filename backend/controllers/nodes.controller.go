@@ -19,6 +19,8 @@ type NodeController interface {
 	CreateNode(c *gin.Context) (int, any)
 	UpdateNode(c *gin.Context) (int, any)
 	DeleteNode(c *gin.Context) (int, any)
+	GetMyNodes(c *gin.Context) (int, any)
+	PatchNode(c *gin.Context) (int, any)
 }
 
 func NewNodeController(app *app.App) NodeController {
@@ -208,4 +210,39 @@ func (ctr *Controller) DeleteNode(c *gin.Context) (int, any) {
 		return statusFromAccessError(err), err
 	}
 	return http.StatusOK, "OK"
+}
+
+// GetMyNodes returns all nodes for the authenticated user
+func (ctr *Controller) GetMyNodes(c *gin.Context) (int, any) {
+	actor, err := actorFromRequest(c)
+	if err != nil {
+		return statusFromAccessError(err), err
+	}
+	nodes, err := ctr.app.Services.Node.GetAllNodes(c.Request.Context(), actor.UserID)
+	if err != nil {
+		return statusFromAccessError(err), err
+	}
+	return http.StatusOK, nodes
+}
+
+// PatchNode partially updates a node — only JSON fields present in the body are changed
+func (ctr *Controller) PatchNode(c *gin.Context) (int, any) {
+	nodeId, err := utils.GetTargetId(c, c.Param("nodeId"))
+	if err != nil {
+		return http.StatusBadRequest, err
+	}
+	if _, err := actorFromRequest(c); err != nil {
+		return statusFromAccessError(err), err
+	}
+
+	var fields map[string]any
+	if err := c.ShouldBindJSON(&fields); err != nil {
+		return http.StatusBadRequest, err
+	}
+
+	updatedNode, err := ctr.app.Services.Node.PatchNode(c.Request.Context(), nodeId, fields)
+	if err != nil {
+		return statusFromAccessError(err), err
+	}
+	return http.StatusOK, updatedNode
 }

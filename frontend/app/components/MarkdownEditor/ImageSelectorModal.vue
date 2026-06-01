@@ -2,7 +2,15 @@
   <div class="container">
     <EditorAppHeader icon="image" :title="t('markdown.image.title')" :subtitle="t('markdown.image.subtitle')" />
     <div class="content">
-      <AppDrop ref="dropComponent" @select="submitFile as (file: File) => void" />
+      <AppDrop ref="dropComponent" :multiple="true" :max-files="10" @select="onFilesSelected" />
+      <AppButton
+        v-if="pendingFiles.length && !isLoading"
+        type="primary"
+        style="width: 100%; margin-top: -8px"
+        @click="submitFiles"
+      >
+        Upload {{ pendingFiles.length }} file{{ pendingFiles.length !== 1 ? 's' : '' }}
+      </AppButton>
       <Loader v-if="isLoading" style="margin: 12px auto" />
       <p v-if="uploadError" class="error">{{ uploadError }}</p>
       <div class="search-bar">
@@ -40,20 +48,34 @@ const emit = defineEmits<{ (e: 'close'): void }>();
 const searchQuery = ref('');
 const isLoading = ref(false);
 const uploadError = ref<string | null>(null);
+const pendingFiles = ref<File[]>([]);
 const dropComponent = ref();
 const { resourceURL } = useApi();
 
-const submitFile = (selectedFile: File) => {
-  if (!selectedFile) return;
+const onFilesSelected = (files: File | File[] | null) => {
+  if (!files) {
+    pendingFiles.value = [];
+  } else if (Array.isArray(files)) {
+    pendingFiles.value = files;
+  } else {
+    pendingFiles.value = [files];
+  }
+};
+
+const submitFiles = async () => {
+  if (!pendingFiles.value.length) return;
   isLoading.value = true;
-  const body = new FormData();
-  body.append('parent_id', props.nodeId || '');
-  body.append('file', selectedFile);
-  dropComponent.value.reset(); // Reset drop component
-  resourcesStore
-    .post(body)
-    .catch(e => (uploadError.value = e || t('markdown.image.uploadError')))
-    .finally(() => (isLoading.value = false));
+  uploadError.value = null;
+  const filesToUpload = [...pendingFiles.value];
+  pendingFiles.value = [];
+  dropComponent.value.reset();
+  for (const file of filesToUpload) {
+    const body = new FormData();
+    body.append('parent_id', props.nodeId || '');
+    body.append('file', file);
+    await resourcesStore.post(body).catch(e => (uploadError.value = e || t('markdown.image.uploadError')));
+  }
+  isLoading.value = false;
 };
 
 const filteredImages = computed(() => {

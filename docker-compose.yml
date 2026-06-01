@@ -48,8 +48,9 @@ services:
 
   # Alexandrie Backend
   backend:
-    image: ghcr.io/smaug6739/alexandrie-backend:latest
+    image: alexandrie-backend:local
     container_name: alexandrie-backend
+    restart: unless-stopped
     environment:
       # General configuration
       BACKEND_PORT: 8201
@@ -101,7 +102,7 @@ services:
 
   # Alexandrie Frontend
   frontend:
-    image: ghcr.io/smaug6739/alexandrie-frontend:latest
+    image: alexandrie-frontend:local
     container_name: alexandrie-frontend
     restart: unless-stopped
     environment:

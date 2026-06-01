@@ -35,6 +35,11 @@
           <Icon name="delete" display="lg" />
           <p class="hint-tooltip">{{ t('common.actions.delete') }}</p>
         </NuxtLink>
+        <input ref="fileInput" type="file" accept=".md" multiple style="display:none" @change="handleFileUpload" />
+        <NuxtLink v-if="parent && nodesStore.hasPermissions(parent, 2)" class="btn-icon no-mobile" @click="() => fileInput?.click()">
+          <Icon name="import" display="lg" />
+          <p class="hint-tooltip">Subir .md</p>
+        </NuxtLink>
         <span class="doc-count no-mobile">{{ filteredNodes.length != nodes.length ? `${filteredNodes.length} /` : '' }} {{ nodes.length }}</span>
         <ViewSelection v-model="view" :show-kanban="true" />
       </div>
@@ -91,10 +96,12 @@ const { isMobile } = useDevice();
 const modals = useModal();
 const { getAppAccent } = useAppColors();
 const { t } = useI18nT();
+const notifications = useNotifications();
 
 const connectedId = userStore.user?.id;
 const view = ref<ViewMode>();
 const filteredNodes = ref<Node[]>(props.nodes);
+const fileInput = ref<HTMLInputElement | null>(null);
 
 const kanbanBoard = ref<InstanceType<typeof KanbanBoard> | null>(null);
 
@@ -127,6 +134,38 @@ const openEditModal = () => modals.add(new Modal(shallowRef(NodeMetadataModal), 
 const openDeleteModal = () => {
   if (props.parent) modals.add(new Modal(shallowRef(NodeDeleteModal), { size: 'small', props: { node: props.parent, redirect: '/dashboard' } }));
 };
+
+async function handleFileUpload(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = input.files ? Array.from(input.files) : [];
+  if (!files.length || !props.parent) return;
+
+  let ok = 0;
+  const failed: string[] = [];
+  for (const file of files) {
+    const name = file.name.endsWith('.md') ? file.name.slice(0, -3) : file.name;
+    try {
+      const content = await file.text();
+      await nodesStore.post({ name, content, role: 3, accessibility: 1, parent_id: props.parent.id });
+      ok++;
+    } catch (e) {
+      console.error('Failed to import', file.name, e);
+      failed.push(name);
+    }
+  }
+
+  if (ok) {
+    notifications.add({
+      type: 'success',
+      title: ok > 1 ? 'Documentos importados' : 'Documento importado',
+      message: ok > 1 ? `${ok} documentos añadidos correctamente` : `"${files[0].name.replace(/\.md$/, '')}" añadido correctamente`,
+    });
+  }
+  if (failed.length) {
+    notifications.add({ type: 'error', title: 'Error al importar', message: `No se pudieron importar: ${failed.join(', ')}` });
+  }
+  input.value = '';
+}
 
 // Kanban functionality
 async function updateKanbanMetadata(metadata: KanbanMetadata) {

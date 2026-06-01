@@ -17,7 +17,7 @@ RUN bun run build
 # ========================================
 # Runtime stage
 # ========================================
-FROM node:24-alpine AS runtime
+FROM oven/bun:1 AS runtime
 
 WORKDIR /app
 

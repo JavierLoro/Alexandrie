@@ -20,6 +20,7 @@
       <button class="menu-item" @click="action('pin')">
         <Icon :name="node.order === -1 ? 'pin_off' : 'pin'" />{{ node.order === -1 ? t('common.actions.unpin') : t('common.actions.pin') }}<kbd>P</kbd>
       </button>
+      <button class="menu-item" @click="action('download')"><Icon name="markdown" />Exportar como .md</button>
     </div>
 
     <div v-if="nodeStore.hasPermissions(node, 4)" class="menu-group">
@@ -39,6 +40,7 @@
 <script setup lang="ts">
 import NodePermissions from '../Modals/Permissions.vue';
 import NodeDeleteModal from '../Modals/Delete.vue';
+import { generateMarkdownWithMetadata } from '~/helpers/node';
 import type { Node } from '~/stores';
 
 const props = defineProps<{ node: Node; contextMenu?: boolean }>();
@@ -92,6 +94,20 @@ async function action(name: string) {
     case 'copyId':
       navigator.clipboard.writeText(props.node.id);
       break;
+    case 'download': {
+      let node: Node = props.node;
+      if (node.partial) node = (await nodeStore.fetch({ id: node.id })) as Node;
+      const blob = new Blob([generateMarkdownWithMetadata(node)], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${node.name}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      break;
+    }
   }
   emit('close');
 }
