@@ -59,6 +59,7 @@ import ImportActions from './_components/ImportActions.vue';
 import { handleBackupFile } from '~/helpers/backups';
 import type { Manifest } from '~/helpers/backups/types';
 import type { DB_Node, ImportJob } from '~/stores/db_strustures';
+import compile from '~/helpers/markdown';
 
 definePageMeta({ breadcrumb: { i18n: 'import.meta.breadcrumb' } });
 
@@ -119,20 +120,25 @@ async function analyzeFile() {
 
   try {
     if (mdFiles.length) {
-      // One or many markdown files — import directly, no preview needed
+      // One or many markdown files — import directly, no preview step.
+      // Precompile content_compiled so the rendered preview shows without opening the editor.
       const now = Date.now();
       const markdownNodes: DB_Node[] = await Promise.all(
-        mdFiles.map(async (file): Promise<DB_Node> => ({
-          id: '0',
-          user_id: '',
-          name: file.name.slice(0, -3),
-          role: 3,
-          accessibility: 1,
-          access: 2,
-          content: await file.text(),
-          created_timestamp: now,
-          updated_timestamp: now,
-        })),
+        mdFiles.map(async (file): Promise<DB_Node> => {
+          const content = await file.text();
+          return {
+            id: '0',
+            user_id: '',
+            name: file.name.slice(0, -3),
+            role: 3,
+            accessibility: 1,
+            access: 2,
+            content,
+            content_compiled: compile(content),
+            created_timestamp: now,
+            updated_timestamp: now,
+          };
+        }),
       );
       const job = ref<ImportJob>({
         status: 'pending',

@@ -85,6 +85,7 @@ import KanbanBoard, { type KanbanMetadata } from '~/components/Kanban/Board.vue'
 import ResetBoardModal from '../Kanban/ResetBoard.modal.vue';
 import type { ViewMode } from '~/components/ViewSelection.vue';
 import type { Node } from '~/stores';
+import compile from '~/helpers/markdown';
 
 const props = defineProps<{ parent?: Node; nodes: Node[]; parentId?: string }>();
 
@@ -146,7 +147,7 @@ async function handleFileUpload(event: Event) {
     const name = file.name.endsWith('.md') ? file.name.slice(0, -3) : file.name;
     try {
       const content = await file.text();
-      await nodesStore.post({ name, content, role: 3, accessibility: 1, parent_id: props.parent.id });
+      await nodesStore.post({ name, content, content_compiled: compile(content), role: 3, accessibility: 1, parent_id: props.parent.id });
       ok++;
     } catch (e) {
       console.error('Failed to import', file.name, e);
