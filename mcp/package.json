@@ -1,0 +1,31 @@
+{
+  "name": "alexandrie-mcp",
+  "version": "1.4.0",
+  "description": "MCP server for Alexandrie documentation platform",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "sync": "node scripts/sync-renderer.mjs",
+    "prebuild": "node scripts/sync-renderer.mjs",
+    "build": "tsc",
+    "predev": "node scripts/sync-renderer.mjs",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@types/markdown-it": "^14.1.2",
+    "katex": "^0.17.0",
+    "markdown-it": "^14.2.0",
+    "markdown-it-anchor": "^9.2.0",
+    "markdown-it-container": "^4.0.0",
+    "markdown-it-highlightjs": "^4.3.0",
+    "markdown-it-mark": "^4.0.0",
+    "marked": "^18.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}

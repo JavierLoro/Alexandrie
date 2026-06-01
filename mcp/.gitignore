@@ -1,0 +1,4 @@
+node_modules/
+dist/
+# Renderer vendorizado: se genera en cada build desde frontend/app/helpers/markdown/
+src/markdown/
