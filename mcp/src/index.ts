@@ -93,6 +93,10 @@ function buildServer(): McpServer {
       tags: z.string().optional().describe("Comma-separated tags"),
       content: z.string().optional().describe("Markdown body (for documents)"),
       accessibility: z.union([z.literal(0), z.literal(1), z.literal(2)]).describe("0=Public 1=Private 2=Unlisted"),
+      metadata: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe("Optional metadata object. Set {\"render\":\"html\"} to render the node body (raw content) as a sandboxed HTML page instead of Markdown."),
     },
     async (payload) => {
       const node = await api.createNode(payload as api.CreateNodePayload);
@@ -112,6 +116,11 @@ function buildServer(): McpServer {
       content: z.string().optional().nullable().describe("New Markdown content"),
       accessibility: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional().describe("0=Public 1=Private 2=Unlisted"),
       parent_id: z.string().optional().nullable().describe("Move node to a different parent"),
+      metadata: z
+        .record(z.string(), z.any())
+        .optional()
+        .nullable()
+        .describe("Optional metadata object (replaces existing). Set {\"render\":\"html\"} to render the body as a sandboxed HTML page; null clears it."),
     },
     async ({ node_id, ...payload }) => {
       const node = await api.updateNode(node_id, payload as api.UpdateNodePayload);

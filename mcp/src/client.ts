@@ -54,6 +54,7 @@ export interface CreateNodePayload {
   tags?: string;
   content?: string;
   accessibility: Accessibility;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface UpdateNodePayload {
@@ -64,6 +65,7 @@ export interface UpdateNodePayload {
   content?: string | null;
   accessibility?: Accessibility;
   parent_id?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface BackupJob {

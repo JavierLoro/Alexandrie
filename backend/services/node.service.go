@@ -382,6 +382,14 @@ func (s *nodeService) PatchNode(ctx context.Context, nodeId types.Snowflake, fie
 			}
 		}
 	}
+	if v, ok := fields["metadata"]; ok {
+		if v == nil {
+			dbNode.Metadata = nil
+		} else if m, ok := v.(map[string]any); ok {
+			jsonb := types.JSONB(m)
+			dbNode.Metadata = &jsonb
+		}
+	}
 
 	return s.UpdateNode(ctx, nodeId, dbNode)
 }
