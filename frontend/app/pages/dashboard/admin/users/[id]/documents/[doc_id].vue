@@ -77,8 +77,10 @@
       <label for="content">Content</label>
       <div style="display: flex; width: 100%; height: 500px; flex: 1; gap: 10px">
         <textarea v-model="document.content" style="height: 500px; flex: 1; overflow: auto"></textarea>
-        <!-- eslint-disable-next-line vue/no-v-html -->
-        <div style="height: 500px; flex: 1; overflow: auto" class="alexandrie-theme" v-html="document.content_compiled" />
+        <!-- Render vía ContentCompiled: docs HTML van al iframe sandbox; el resto, markdown saneado. No usar v-html directo (XSS same-origin). -->
+        <div style="height: 500px; flex: 1; overflow: auto" class="alexandrie-theme">
+          <NodeDocumentContentCompiled :node="document" />
+        </div>
       </div>
     </div>
 
@@ -88,6 +90,7 @@
 
 <script setup lang="ts">
 import type { Node } from '~/stores';
+import NodeDocumentContentCompiled from '~/components/Node/Document/ContentCompiled.vue';
 
 definePageMeta({ breadcrumb: 'Document view' });
 

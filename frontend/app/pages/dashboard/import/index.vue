@@ -126,14 +126,13 @@ async function analyzeFile() {
       // One or many .md/.html files — import directly, no preview step.
       // Precompile content_compiled so the rendered preview shows without opening the editor.
       const now = Date.now();
-      const sanitize = preferences.get('htmlUploadSanitize').value;
       const defaultFolder = preferences.get('defaultUploadFolder').value;
       const parentId = defaultFolder && nodesStore.nodes.has(defaultFolder) ? defaultFolder : undefined;
       const docNodes: DB_Node[] = await Promise.all(
         docFiles.map(async (file): Promise<DB_Node> => {
           const raw = await file.text();
           const isHtml = /\.html?$/i.test(file.name);
-          const { content, content_compiled } = isHtml ? processHtmlUpload(raw, sanitize) : { content: raw, content_compiled: compile(raw) };
+          const { content, content_compiled } = isHtml ? processHtmlUpload(raw) : { content: raw, content_compiled: compile(raw) };
           return {
             id: '0',
             user_id: '',

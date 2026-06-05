@@ -70,7 +70,6 @@ export const DEFAULT_PREFERENCES = {
   stylesInjection: '' as string,
   stylesDocumentsInjection: '' as string,
   defaultUploadFolder: null as string | null,
-  htmlUploadSanitize: true as boolean, // Sanea con DOMPurify el HTML de los .html subidos
 };
 
 export type Preferences = {
@@ -120,5 +119,4 @@ export const ADVANCED_KEYS: PreferenceKey[] = [
   'stylesInjection',
   'stylesDocumentsInjection',
   'defaultUploadFolder',
-  'htmlUploadSanitize',
 ];

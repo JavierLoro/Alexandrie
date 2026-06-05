@@ -172,8 +172,6 @@ export default {
     defaultUploadFolderDesc: 'Choose the default folder where your uploads will be stored. Can be changed per upload.',
     developerMode: 'Developer mode',
     developerModeDesc: 'Enable extra debug features like "Copy ID" in context menus.',
-    htmlUploadSanitize: 'Sanitize uploaded HTML',
-    htmlUploadSanitizeDesc: 'Strip scripts and unsafe attributes from uploaded .html files before rendering. Disable only for fully trusted HTML.',
     otherSection: 'Other',
     subtitle: 'Manage other general application settings.',
     title: 'Other',

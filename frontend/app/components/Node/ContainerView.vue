@@ -91,7 +91,6 @@ import { processHtmlUpload } from '~/helpers/html';
 const props = defineProps<{ parent?: Node; nodes: Node[]; parentId?: string }>();
 
 const nodesStore = useNodesStore();
-const preferences = usePreferencesStore();
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -143,7 +142,6 @@ async function handleFileUpload(event: Event) {
   const files = input.files ? Array.from(input.files) : [];
   if (!files.length || !props.parent) return;
 
-  const sanitize = preferences.get('htmlUploadSanitize').value;
   let ok = 0;
   const failed: string[] = [];
   for (const file of files) {
@@ -151,7 +149,7 @@ async function handleFileUpload(event: Event) {
     try {
       const raw = await file.text();
       const isHtml = /\.html?$/i.test(file.name);
-      const { content, content_compiled } = isHtml ? processHtmlUpload(raw, sanitize) : { content: raw, content_compiled: compile(raw) };
+      const { content, content_compiled } = isHtml ? processHtmlUpload(raw) : { content: raw, content_compiled: compile(raw) };
       await nodesStore.post({ name, content, content_compiled, role: 3, accessibility: 1, parent_id: props.parent.id, ...(isHtml ? { metadata: { render: 'html' as const } } : {}) });
       ok++;
     } catch (e) {

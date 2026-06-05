@@ -173,8 +173,6 @@ export default {
     defaultUploadFolderDesc: 'Choisissez le dossier par défaut où vos téléchargements seront stockés. Vous pouvez le modifier pour chaque téléchargement.',
     developerMode: 'Mode développeur',
     developerModeDesc: 'Activer des fonctionnalités de débogage supplémentaires comme "Copier l\'ID" dans les menus contextuels.',
-    htmlUploadSanitize: 'Assainir le HTML téléversé',
-    htmlUploadSanitizeDesc: 'Supprime les scripts et attributs dangereux des fichiers .html téléversés avant le rendu. À désactiver uniquement pour du HTML de confiance.',
     otherSection: 'Autre',
     subtitle: "Gérez les autres paramètres généraux de l'application.",
     title: 'Autre',
