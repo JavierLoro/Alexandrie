@@ -12,3 +12,8 @@ main.exe
 test.vue
 
 .idea
+
+# CodeGraph (local code knowledge graph + MCP config)
+.codegraph/
+.mcp.json
+.claude/
