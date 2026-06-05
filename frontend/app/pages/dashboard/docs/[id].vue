@@ -1,19 +1,40 @@
 <!-- eslint-disable vue/no-v-html -->
 <template>
   <div style="width: 100%; padding: 1rem 0" @contextmenu.prevent="showContextMenu">
-    <div v-if="!error" style="display: flex; justify-content: space-between">
-      <div :style="{ maxWidth: width }" class="doc-container">
-        <NodeDocumentHeader :doc="node" style="margin-bottom: 20px" />
+    <template v-if="!error">
+      <!-- Docs HTML: fila 1 = info del nodo + sidebar TOC; fila 2 = iframe a sangre completa -->
+      <template v-if="isHtmlDoc">
+        <div style="display: flex; justify-content: space-between">
+          <div :style="{ maxWidth: width }" class="doc-container">
+            <NodeDocumentHeader :doc="node" style="margin-bottom: 20px" />
+          </div>
 
-        <NodeDocumentContentCompiled v-if="node" ref="elementComponent" :node="node" />
-        <NodeDocumentSkeleton v-else />
-        <NodeDocumentFooter :document="node" :next="next" :previous="previous" />
-      </div>
+          <div v-if="!devise.isTablet.value && !hideTOC" class="toc">
+            <NodeTOC :doc="node" :headings="headings" :scroll-to="scrollToHeading" style="width: 320px; margin-left: 20px" />
+          </div>
+        </div>
+        <div class="html-fullbleed">
+          <NodeDocumentContentCompiled v-if="node" ref="elementComponent" :node="node" />
+          <NodeDocumentSkeleton v-else />
+          <NodeDocumentFooter :document="node" :next="next" :previous="previous" />
+        </div>
+      </template>
 
-      <div v-if="!devise.isTablet.value && !hideTOC" class="toc">
-        <NodeTOC :doc="node" :element="element" style="width: 320px; margin-left: 20px" />
+      <!-- Docs Markdown: layout original intacto -->
+      <div v-else style="display: flex; justify-content: space-between">
+        <div :style="{ maxWidth: width }" class="doc-container">
+          <NodeDocumentHeader :doc="node" style="margin-bottom: 20px" />
+
+          <NodeDocumentContentCompiled v-if="node" ref="elementComponent" :node="node" />
+          <NodeDocumentSkeleton v-else />
+          <NodeDocumentFooter :document="node" :next="next" :previous="previous" />
+        </div>
+
+        <div v-if="!devise.isTablet.value && !hideTOC" class="toc">
+          <NodeTOC :doc="node" :element="element" style="width: 320px; margin-left: 20px" />
+        </div>
       </div>
-    </div>
+    </template>
     <Error v-else :error="error" />
   </div>
 </template>
@@ -47,6 +68,11 @@ const elementComponent = ref<InstanceType<typeof NodeDocumentContentCompiled>>()
 const element = computed(() => elementComponent.value?.rootElement as HTMLElement | undefined);
 
 const node = ref<Node | undefined>();
+
+// Docs HTML: layout de dos filas + TOC alimentado por los headings que reporta el iframe.
+const isHtmlDoc = computed(() => node.value?.metadata?.render === 'html');
+const headings = computed(() => elementComponent.value?.headings ?? []);
+const scrollToHeading = (id: string) => elementComponent.value?.scrollToHeading?.(id);
 const error = ref<false | string>(false);
 
 watchEffect(async () => {
@@ -134,8 +160,17 @@ onMounted(() => {
   margin: 0 auto;
 }
 
+.html-fullbleed {
+  width: 100%;
+  margin-top: 10px;
+}
+
 @media screen and (width >= 810px) {
   .doc-container {
+    padding: 0 2rem;
+  }
+
+  .html-fullbleed {
     padding: 0 2rem;
   }
 }

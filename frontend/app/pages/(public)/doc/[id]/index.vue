@@ -1,30 +1,49 @@
 <!-- eslint-disable vue/no-v-html -->
 <template>
   <div style="width: 100%; padding: 1rem 0">
-    <div
-      v-if="!error && article"
-      class="reader"
-      :style="{
-        marginRight: !isTablet && hideTOC && isOpened && hasContent ? '200px' : '0px',
-        transition: 'margin $transition-medium',
-      }"
-    >
-      <div class="doc-container">
-        <!-- Header for all node types -->
-        <NodeDocumentHeader :doc="article" :public="true" style="margin: 20px 0" />
+    <template v-if="!error && article">
+      <!-- Docs HTML: fila 1 = info del nodo + sidebar TOC; fila 2 = iframe a sangre completa -->
+      <template v-if="isHtmlDoc">
+        <div class="reader">
+          <div class="doc-container">
+            <NodeDocumentHeader :doc="article" :public="true" style="margin: 20px 0" />
+          </div>
+          <div v-if="!isTablet && !hideTOC && hasContent" class="toc">
+            <NodeTOC :doc="article" :headings="headings" :scroll-to="scrollToHeading" />
+          </div>
+        </div>
+        <div class="html-fullbleed">
+          <NodeDocumentContentCompiled v-if="hasContent" ref="elementComponent" :node="article" />
+          <NodeTree v-if="children.length > 0" :nodes="children" :parent-id="article.id" />
+        </div>
+      </template>
 
-        <!-- Document content if available -->
-        <NodeDocumentContentCompiled v-if="hasContent" ref="elementComponent" :node="article" />
+      <!-- Docs Markdown: layout original intacto -->
+      <div
+        v-else
+        class="reader"
+        :style="{
+          marginRight: !isTablet && hideTOC && isOpened && hasContent ? '200px' : '0px',
+          transition: 'margin $transition-medium',
+        }"
+      >
+        <div class="doc-container">
+          <!-- Header for all node types -->
+          <NodeDocumentHeader :doc="article" :public="true" style="margin: 20px 0" />
 
-        <!-- Hierarchical children tree -->
-        <NodeTree v-if="children.length > 0" :nodes="children" :parent-id="article.id" />
+          <!-- Document content if available -->
+          <NodeDocumentContentCompiled v-if="hasContent" ref="elementComponent" :node="article" />
+
+          <!-- Hierarchical children tree -->
+          <NodeTree v-if="children.length > 0" :nodes="children" :parent-id="article.id" />
+        </div>
+
+        <!-- Table of contents only for documents with content -->
+        <div v-if="!isTablet && !hideTOC && hasContent" class="toc">
+          <NodeTOC :doc="article" :element="element" />
+        </div>
       </div>
-
-      <!-- Table of contents only for documents with content -->
-      <div v-if="!isTablet && !hideTOC && hasContent" class="toc">
-        <NodeTOC :doc="article" :element="element" />
-      </div>
-    </div>
+    </template>
 
     <!-- Loading state -->
     <div v-else-if="!error" class="reader">
@@ -67,6 +86,11 @@ const { data: article, error } = await useAsyncData(`public-doc-${route.params.i
 
 /** Check if node has displayable content */
 const hasContent = computed(() => article.value?.content_compiled && article.value.content_compiled.trim().length > 0);
+
+// Docs HTML: layout de dos filas + TOC alimentado por los headings que reporta el iframe.
+const isHtmlDoc = computed(() => article.value?.metadata?.render === 'html');
+const headings = computed(() => elementComponent.value?.headings ?? []);
+const scrollToHeading = (id: string) => elementComponent.value?.scrollToHeading?.(id);
 const title = computed(() => article.value?.name || 'Unknown document');
 const description = computed(() => article.value?.description || 'Public document published on Alexandrie, a modern Markdown-based note-taking platform.');
 const baseUrl = runtimeConfig.public.baseUrl || 'https://alexandrie-hub.fr';
@@ -106,6 +130,11 @@ useSeoMeta({
 .doc-container {
   margin: 0;
   grid-column: 2;
+}
+
+.html-fullbleed {
+  width: 100%;
+  margin-top: 10px;
 }
 
 @media screen and (width >= 810px) {
