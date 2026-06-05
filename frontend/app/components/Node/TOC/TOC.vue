@@ -4,10 +4,10 @@
     <div v-if="doc?.tags" style="display: flex; font-size: 14px; flex-wrap: wrap">
       <tag v-for="tag in doc?.tags.split(',')" :key="tag" class="primary">#{{ tag.trim() }}</tag>
     </div>
-    <ul ref="list" style="position: relative" @click.capture="onTocClick">
-      <div v-if="hasHeaders && !isHtmlMode" ref="marker" class="marker" />
+    <ul v-if="!hideToc" ref="list" style="position: relative">
+      <div v-if="headers.length" ref="marker" class="marker" />
       <h4>{{ t('nodes.document.TOC') }}</h4>
-      <div v-if="hasHeaders">
+      <div v-if="headers.length">
         <NodeTOCLevel v-for="header of headers_tree" :key="header.link" :node="header" style="padding-left: 10px" />
       </div>
       <p v-else>{{ t('common.nothing') }}</p>
@@ -25,18 +25,10 @@ import type { TreeItem as NodeTreeItem } from '~/helpers/TreeBuilder';
 
 const { t } = useI18nT();
 
-// `element` → headings desde el DOM (Markdown). `headings`/`scrollTo` → docs HTML, cuyos
-// headings llegan del iframe vía postMessage (el sandbox impide leer su DOM desde aquí).
-const props = defineProps<{
-  element?: HTMLElement;
-  doc?: Node;
-  headings?: { level: number; text: string; id: string }[];
-  scrollTo?: (id: string) => void;
-}>();
+// `hideToc`: oculta el índice (no aplica a docs HTML, cuyos headings viven en el iframe);
+// la barra sigue mostrando tags e hijos.
+const props = defineProps<{ element?: HTMLElement; doc?: Node; hideToc?: boolean }>();
 const list = ref<HTMLElement>();
-
-// Modo HTML: usamos los headings reportados por el iframe en vez del DOM local.
-const isHtmlMode = computed(() => !!props.headings?.length);
 
 interface GroupedHeaders {
   title: string;
@@ -87,28 +79,7 @@ function buildTree(tree: GroupedHeaders[]): TreeItem[] {
 }
 
 const headers = computed(() => getHTMLHeaders());
-// Headings agrupados: desde los del iframe (HTML) o desde el DOM (Markdown).
-const groupedHeaders = computed<GroupedHeaders[]>(() => {
-  if (props.headings?.length) {
-    return props.headings.map(h => ({ title: h.text, link: `#${h.id}`, level: h.level }));
-  }
-  return getHeaders(headers.value);
-});
-const hasHeaders = computed(() => groupedHeaders.value.length > 0);
-const headers_tree = computed(() => buildTree(groupedHeaders.value));
-
-// En modo HTML los anclas normales no pueden hacer scroll dentro del iframe sandbox;
-// interceptamos el click y delegamos en scrollTo (postMessage al iframe).
-function onTocClick(e: MouseEvent) {
-  if (!props.scrollTo) return;
-  const anchor = (e.target as HTMLElement | null)?.closest('a');
-  const href = anchor?.getAttribute('href');
-  if (!href || !href.startsWith('#')) return;
-  // Captura: interceptamos antes de que NuxtLink navegue al hash en el documento padre.
-  e.preventDefault();
-  e.stopPropagation();
-  props.scrollTo(href.slice(1));
-}
+const headers_tree = computed(() => buildTree(getHeaders(headers.value)));
 
 // On scroll, highlight the current header
 

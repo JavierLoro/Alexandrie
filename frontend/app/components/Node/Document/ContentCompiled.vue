@@ -43,31 +43,15 @@ const isHtmlDoc = computed(() => props.node?.metadata?.render === 'html');
 const htmlFrame = ref<HTMLIFrameElement>();
 const frameHeight = ref('300px');
 
-// Headings reportados por el iframe (para el TOC, ver Fix 3). Texto sin sanear aquí: el
-// consumidor (Node/TOC/Level.vue) lo pinta con interpolación `{{ }}`, nunca con v-html.
-interface IframeHeading {
-  level: number;
-  text: string;
-  id: string;
-}
-const headings = ref<IframeHeading[]>([]);
-
 // Tope de altura del iframe HTML: acota el ajuste automático para que `min-height:100vh`
 // (que se resolvería contra la propia altura del iframe) no entre en un bucle de crecimiento
 // sin fin. Al fijar la altura, el contenido más alto hace scroll interno. Se calcula en
 // onMounted (window no existe en SSR) y se recalcula al redimensionar la ventana.
 const maxFrameHeightPx = ref(2000);
 
-// Pide al iframe que haga scroll hasta un heading (navegación del TOC vía postMessage,
-// porque el sandbox sin allow-same-origin impide manipular su DOM desde el padre).
-function scrollToHeading(id: string) {
-  htmlFrame.value?.contentWindow?.postMessage({ type: 'alexandrie-scroll-to', id }, '*');
-}
+defineExpose({ rootElement });
 
-defineExpose({ rootElement, headings, scrollToHeading });
-
-// Snippet inyectado en el iframe que reporta su altura y sus headings al padre vía
-// postMessage, y escucha peticiones de scroll a un heading (navegación del TOC).
+// Snippet inyectado en el iframe que reporta su altura al padre vía postMessage.
 const RESIZE_SNIPPET = `
 <script>
 (function () {
@@ -78,29 +62,11 @@ const RESIZE_SNIPPET = `
     );
     parent.postMessage({ type: 'alexandrie-iframe-height', height: h }, '*');
   }
-  function sendHeadings() {
-    var els = document.querySelectorAll('h1,h2,h3,h4,h5,h6');
-    var out = [];
-    for (var i = 0; i < els.length; i++) {
-      var el = els[i];
-      if (!el.id) el.id = 'alexandrie-h-' + i;
-      out.push({ level: parseInt(el.tagName.charAt(1), 10), text: (el.textContent || '').trim(), id: el.id });
-    }
-    parent.postMessage({ type: 'alexandrie-iframe-headings', headings: out }, '*');
-  }
   window.addEventListener('load', send);
   window.addEventListener('resize', send);
-  window.addEventListener('load', sendHeadings);
   if (window.ResizeObserver) new ResizeObserver(send).observe(document.documentElement);
-  window.addEventListener('message', function (e) {
-    if (e.data && e.data.type === 'alexandrie-scroll-to' && e.data.id) {
-      var t = document.getElementById(e.data.id);
-      if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  });
   setTimeout(send, 100);
   setTimeout(send, 600);
-  setTimeout(sendHeadings, 600);
 })();
 <\u002fscript>`;
 
@@ -116,13 +82,10 @@ function onFrameMessage(e: MessageEvent) {
   if (!e.data) return;
   // Solo aceptamos mensajes de nuestro propio iframe.
   if (htmlFrame.value && e.source !== htmlFrame.value.contentWindow) return;
-  if (e.data.type === 'alexandrie-iframe-height') {
-    const h = Number(e.data.height);
-    // Clamp: corta el bucle de crecimiento y deja que el contenido más alto haga scroll interno.
-    if (Number.isFinite(h) && h > 0) frameHeight.value = `${Math.min(h, maxFrameHeightPx.value)}px`;
-  } else if (e.data.type === 'alexandrie-iframe-headings') {
-    headings.value = Array.isArray(e.data.headings) ? e.data.headings : [];
-  }
+  if (e.data.type !== 'alexandrie-iframe-height') return;
+  const h = Number(e.data.height);
+  // Clamp: corta el bucle de crecimiento y deja que el contenido más alto haga scroll interno.
+  if (Number.isFinite(h) && h > 0) frameHeight.value = `${Math.min(h, maxFrameHeightPx.value)}px`;
 }
 
 function updateMaxFrameHeight() {

@@ -10,7 +10,7 @@
           </div>
 
           <div v-if="!devise.isTablet.value && !hideTOC" class="toc">
-            <NodeTOC :doc="node" :headings="headings" :scroll-to="scrollToHeading" style="width: 320px; margin-left: 20px" />
+            <NodeTOC :doc="node" hide-toc style="width: 320px; margin-left: 20px" />
           </div>
         </div>
         <div class="html-fullbleed">
@@ -69,10 +69,8 @@ const element = computed(() => elementComponent.value?.rootElement as HTMLElemen
 
 const node = ref<Node | undefined>();
 
-// Docs HTML: layout de dos filas + TOC alimentado por los headings que reporta el iframe.
+// Docs HTML: layout de dos filas; el índice (TOC) se oculta para estos docs.
 const isHtmlDoc = computed(() => node.value?.metadata?.render === 'html');
-const headings = computed(() => elementComponent.value?.headings ?? []);
-const scrollToHeading = (id: string) => elementComponent.value?.scrollToHeading?.(id);
 const error = ref<false | string>(false);
 
 watchEffect(async () => {
