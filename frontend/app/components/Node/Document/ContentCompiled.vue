@@ -6,7 +6,7 @@
     class="html-doc-frame"
     sandbox="allow-scripts allow-popups allow-modals allow-forms"
     :srcdoc="htmlSrcdoc"
-    :style="{ height: frameHeight }"
+    :style="standalone ? { height: '100dvh', width: '100%' } : { height: frameHeight }"
   />
   <article
     v-else
@@ -22,7 +22,7 @@ import type { Node } from '~/stores';
 import { subscribeDrawioCacheInvalidated } from '~/composables/useDrawioCache';
 import { rerenderImages } from '~/helpers/DOM';
 
-const props = defineProps<{ node?: Partial<Node> }>();
+const props = defineProps<{ node?: Partial<Node>; standalone?: boolean }>();
 
 const preferences = usePreferencesStore();
 
@@ -73,6 +73,7 @@ const RESIZE_SNIPPET = `
 const htmlSrcdoc = computed(() => {
   if (!isHtmlDoc.value) return '';
   const raw = props.node?.content || '';
+  if (props.standalone) return raw;
   // Inyecta el snippet de auto-altura antes de </body> (o al final si no existe).
   if (/<\/body>/i.test(raw)) return raw.replace(/<\/body>/i, `${RESIZE_SNIPPET}</body>`);
   return raw + RESIZE_SNIPPET;
@@ -93,17 +94,21 @@ function updateMaxFrameHeight() {
 }
 
 onMounted(() => {
-  updateMaxFrameHeight();
-  window.addEventListener('resize', updateMaxFrameHeight);
-  window.addEventListener('message', onFrameMessage);
   const unsub = subscribeDrawioCacheInvalidated(() => {
     if (rootElement.value) rerenderImages(rootElement.value);
   });
-  onUnmounted(() => {
-    window.removeEventListener('resize', updateMaxFrameHeight);
-    window.removeEventListener('message', onFrameMessage);
-    unsub();
-  });
+  if (!props.standalone) {
+    updateMaxFrameHeight();
+    window.addEventListener('resize', updateMaxFrameHeight);
+    window.addEventListener('message', onFrameMessage);
+    onUnmounted(() => {
+      window.removeEventListener('resize', updateMaxFrameHeight);
+      window.removeEventListener('message', onFrameMessage);
+      unsub();
+    });
+  } else {
+    onUnmounted(() => unsub());
+  }
 });
 </script>
 

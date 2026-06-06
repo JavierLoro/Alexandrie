@@ -2,16 +2,8 @@
 <template>
   <div style="width: 100%; padding: 1rem 0">
     <template v-if="!error && article">
-      <!-- Docs HTML: fila 1 = info del nodo + sidebar TOC; fila 2 = iframe a sangre completa -->
+      <!-- Docs HTML: iframe a sangre completa, sin chrome -->
       <template v-if="isHtmlDoc">
-        <div class="reader">
-          <div class="doc-container">
-            <NodeDocumentHeader :doc="article" :public="true" style="margin: 20px 0" />
-          </div>
-          <div v-if="!isTablet && !hideTOC && hasContent" class="toc">
-            <NodeTOC :doc="article" hide-toc />
-          </div>
-        </div>
         <div class="html-fullbleed">
           <NodeDocumentContentCompiled v-if="hasContent" ref="elementComponent" :node="article" />
           <NodeTree v-if="children.length > 0" :nodes="children" :parent-id="article.id" />
