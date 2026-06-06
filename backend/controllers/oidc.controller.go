@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"alexandrie/app"
+	"alexandrie/services"
 	"alexandrie/utils"
 	"errors"
 	"net/http"
@@ -127,6 +128,9 @@ func (ctr *Controller) Callback(c *gin.Context) (int, any) {
 	// Handle login flow - login or create user
 	user, session, isNewLink, err := ctr.app.Services.OIDC.LoginOrCreate(providerName, userInfo, c.ClientIP(), c.Request.UserAgent())
 	if err != nil {
+		if errors.Is(err, services.ErrSignupDisabled) {
+			return http.StatusForbidden, err
+		}
 		return http.StatusUnauthorized, err
 	}
 

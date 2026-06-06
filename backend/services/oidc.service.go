@@ -16,10 +16,15 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
 )
+
+// ErrSignupDisabled is returned by LoginOrCreate when CONFIG_DISABLE_SIGNUP is
+// set and the OIDC identity has no existing account to log into.
+var ErrSignupDisabled = errors.New("user signup is disabled")
 
 type StateData struct {
 	Expiry time.Time
@@ -268,7 +273,12 @@ func (s *oidcService) LoginOrCreate(providerName string, userInfo *oidc.UserInfo
 		return user, session, false, nil
 	}
 
-	// No link exists - create new user
+	// No link exists - create new user.
+	// Respect CONFIG_DISABLE_SIGNUP: block automatic account creation via OIDC
+	// (already-linked users login above and are unaffected).
+	if os.Getenv("CONFIG_DISABLE_SIGNUP") == "true" {
+		return nil, nil, false, ErrSignupDisabled
+	}
 
 	user, err := s.createUserFromOIDC(userInfo)
 	if err != nil {
