@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -33,6 +34,7 @@ type authService struct {
 	sessionRepo repositories.SessionRepository
 	logRepo     repositories.LogRepository
 	snowflake   *snowflake.Snowflake
+	throttle    *loginThrottle
 }
 
 func NewAuthService(userRepo repositories.UserRepository, sessionRepo repositories.SessionRepository, logRepo repositories.LogRepository, snowflake *snowflake.Snowflake) AuthService {
@@ -41,6 +43,7 @@ func NewAuthService(userRepo repositories.UserRepository, sessionRepo repositori
 		sessionRepo: sessionRepo,
 		logRepo:     logRepo,
 		snowflake:   snowflake,
+		throttle:    newLoginThrottle(),
 	}
 }
 
@@ -51,9 +54,17 @@ func NewAuthService(userRepo repositories.UserRepository, sessionRepo repositori
 // Return the user and session
 func (s *authService) Login(username, password, ip, userAgent string) (*models.User, *models.Session, error) {
 
+	// Cooldown por cuenta: rechaza el intento si está bloqueada por demasiados
+	// fallos, antes de tocar la BD o bcrypt.
+	throttleKey := strings.ToLower(username)
+	if locked, remaining := s.throttle.locked(throttleKey); locked {
+		return nil, nil, fmt.Errorf("too many failed attempts, try again in %d minutes", int(remaining.Minutes())+1)
+	}
+
 	user, err := s.userRepo.GetByUsername(username)
 
 	if user == nil || err != nil {
+		s.throttle.recordFailure(throttleKey)
 		return nil, nil, errors.New("invalid credentials")
 	}
 
@@ -62,8 +73,12 @@ func (s *authService) Login(username, password, ip, userAgent string) (*models.U
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(*user.Password), []byte(password)); err != nil {
+		s.throttle.recordFailure(throttleKey)
 		return nil, nil, errors.New("invalid credentials")
 	}
+
+	// Login correcto: limpia el contador de fallos de la cuenta.
+	s.throttle.reset(throttleKey)
 
 	session := &models.Session{
 		Id:                   s.snowflake.Generate(),
