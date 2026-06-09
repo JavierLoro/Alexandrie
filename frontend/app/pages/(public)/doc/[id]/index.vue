@@ -2,17 +2,8 @@
 <template>
   <div style="width: 100%; padding: 1rem 0">
     <template v-if="!error && article">
-      <!-- Docs HTML: iframe a sangre completa, sin chrome -->
-      <template v-if="isHtmlDoc">
-        <div class="html-fullbleed">
-          <NodeDocumentContentCompiled v-if="hasContent" ref="elementComponent" :node="article" />
-          <NodeTree v-if="children.length > 0" :nodes="children" :parent-id="article.id" />
-        </div>
-      </template>
-
       <!-- Docs Markdown: layout original intacto -->
       <div
-        v-else
         class="reader"
         :style="{
           marginRight: !isTablet && hideTOC && isOpened && hasContent ? '200px' : '0px',
@@ -70,6 +61,11 @@ const { data: article, error } = await useAsyncData(`public-doc-${route.params.i
   if (!documentId || typeof documentId !== 'string') return undefined;
   const result = await documentsStore.fetchPublic(documentId);
   if (result) {
+    // /doc/:id es para Markdown — los HTML van a /public/:id (sin layout ni márgenes)
+    if (result.node.metadata?.render === 'html') {
+      await navigateTo(`/public/${documentId}`);
+      return undefined;
+    }
     children.value = result.children || [];
     return result.node;
   }
@@ -79,8 +75,6 @@ const { data: article, error } = await useAsyncData(`public-doc-${route.params.i
 /** Check if node has displayable content */
 const hasContent = computed(() => article.value?.content_compiled && article.value.content_compiled.trim().length > 0);
 
-// Docs HTML: layout de dos filas; el índice (TOC) se oculta para estos docs.
-const isHtmlDoc = computed(() => article.value?.metadata?.render === 'html');
 const title = computed(() => article.value?.name || 'Unknown document');
 const description = computed(() => article.value?.description || 'Public document published on Alexandrie, a modern Markdown-based note-taking platform.');
 const baseUrl = runtimeConfig.public.baseUrl || 'https://alexandrie-hub.fr';
@@ -120,11 +114,6 @@ useSeoMeta({
 .doc-container {
   margin: 0;
   grid-column: 2;
-}
-
-.html-fullbleed {
-  width: 100%;
-  margin-top: 10px;
 }
 
 @media screen and (width >= 810px) {
