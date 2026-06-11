@@ -11,6 +11,22 @@ function buildServer(): McpServer {
   const server = new McpServer({ name: "alexandrie", version: "1.4.0" });
 
   // AUTH
+
+// Write responses must NOT echo the node content back into the LLM context.
+// Return only lightweight metadata (see Plan — Mejoras Alexandrie, bug 2026-06-11).
+function writeSummary(node: unknown): string {
+  const n = ((node as { result?: unknown })?.result ?? node) as Record<string, unknown>;
+  const summary = {
+    id: n?.id,
+    name: n?.name,
+    parent_id: n?.parent_id,
+    role: n?.role,
+    accessibility: n?.accessibility,
+    size: typeof n?.content === "string" ? (n.content as string).length : n?.size,
+  };
+  return JSON.stringify(summary, null, 2);
+}
+
   server.tool(
     "auth_login",
     "Login to Alexandrie and obtain an access token. For normal operations prefer the ALEXANDRIE_TOKEN env var.",
@@ -100,7 +116,7 @@ function buildServer(): McpServer {
     },
     async (payload) => {
       const node = await api.createNode(payload as api.CreateNodePayload);
-      return { content: [{ type: "text", text: `Node created.\n${JSON.stringify(node, null, 2)}` }] };
+      return { content: [{ type: "text", text: `Node created.\n${writeSummary(node)}` }] };
     }
   );
 
@@ -124,7 +140,7 @@ function buildServer(): McpServer {
     },
     async ({ node_id, ...payload }) => {
       const node = await api.updateNode(node_id, payload as api.UpdateNodePayload);
-      return { content: [{ type: "text", text: `Node updated.\n${JSON.stringify(node, null, 2)}` }] };
+      return { content: [{ type: "text", text: `Node updated.\n${writeSummary(node)}` }] };
     }
   );
 
@@ -188,7 +204,7 @@ function buildServer(): McpServer {
     },
     async ({ url, ...payload }) => {
       const node = await api.createNodeFromUrl(url, { role: 3, ...payload } as Parameters<typeof api.createNodeFromUrl>[1]);
-      return { content: [{ type: "text", text: `Node created from URL.\n${JSON.stringify(node, null, 2)}` }] };
+      return { content: [{ type: "text", text: `Node created from URL.\n${writeSummary(node)}` }] };
     }
   );
 
