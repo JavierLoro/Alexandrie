@@ -43,11 +43,49 @@ function writeSummary(node: unknown): string {
   // NODES
   server.tool(
     "nodes_list",
-    "List all nodes (workspaces, categories, documents) belonging to a user. Omit user_id to list nodes of the authenticated user.",
-    { user_id: z.string().optional().describe("User ID whose nodes to retrieve (omit for current user)") },
-    async ({ user_id }) => {
-      const nodes = await api.listNodes(user_id);
-      return { content: [{ type: "text", text: JSON.stringify(nodes, null, 2) }] };
+    "List nodes (workspaces, categories, documents). By default lists the whole tree of the authenticated user; use parent_id to list only one branch (recursive=false for direct children only) and role to filter by node type. Null/empty fields are omitted from the output.",
+    {
+      user_id: z.string().optional().describe("User ID whose nodes to retrieve (omit for current user)"),
+      parent_id: z.string().optional().describe("Only nodes under this node (children, or whole subtree with recursive)"),
+      recursive: z.boolean().optional().describe("With parent_id: include the full subtree (default true). false = direct children only."),
+      role: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional().describe("Filter by type: 1=workspace 2=category 3=document"),
+    },
+    async ({ user_id, parent_id, recursive, role }) => {
+      const res = (await api.listNodes(user_id)) as { result?: unknown } | unknown[];
+      let nodes = (Array.isArray(res) ? res : (res as { result?: unknown })?.result ?? res) as Array<Record<string, unknown>>;
+      if (!Array.isArray(nodes)) nodes = [];
+
+      if (parent_id) {
+        if (recursive === false) {
+          nodes = nodes.filter((n) => n.parent_id === parent_id);
+        } else {
+          const wanted = new Set<string>([parent_id]);
+          let grew = true;
+          while (grew) {
+            grew = false;
+            for (const n of nodes) {
+              const id = String(n.id);
+              if (!wanted.has(id) && n.parent_id != null && wanted.has(String(n.parent_id))) {
+                wanted.add(id);
+                grew = true;
+              }
+            }
+          }
+          nodes = nodes.filter((n) => wanted.has(String(n.id)));
+        }
+      }
+      if (role !== undefined) nodes = nodes.filter((n) => n.role === role);
+
+      // Podar campos null/vacíos para no quemar contexto con ruido
+      const slim = nodes.map((n) => {
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(n)) {
+          if (v === null || v === "" || k === "permissions" || k === "content") continue;
+          out[k] = v;
+        }
+        return out;
+      });
+      return { content: [{ type: "text", text: JSON.stringify(slim, null, 2) }] };
     }
   );
 
