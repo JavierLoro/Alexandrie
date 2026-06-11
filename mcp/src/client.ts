@@ -203,6 +203,32 @@ export async function deleteNode(nodeId: string): Promise<{ message: string }> {
   return request<{ message: string }>("DELETE", `/api/nodes/${nodeId}`);
 }
 
+// Append content to an existing document without resending the whole body.
+export async function appendNode(
+  nodeId: string,
+  content: string,
+  separator: string = "\n\n"
+): Promise<unknown> {
+  const res = (await getNode(nodeId)) as { result?: { node?: { content?: string | null } } };
+  const node = res?.result?.node;
+  if (!node) throw new Error(`Node ${nodeId} not found`);
+  const existing = node.content ?? "";
+  const newContent = existing ? existing + separator + content : content;
+  await updateNode(nodeId, { content: newContent });
+  return { node_id: nodeId, appended_chars: content.length, new_length: newContent.length };
+}
+
+// Create a node whose content is fetched from a URL.
+export async function createNodeFromUrl(
+  url: string,
+  payload: Omit<CreateNodePayload, "content">
+): Promise<unknown> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch URL ${url}: ${res.status} ${res.statusText}`);
+  const content = await res.text();
+  return createNode({ ...payload, content });
+}
+
 // ── Backup ────────────────────────────────────────────────────────────────────
 
 export async function startBackup(): Promise<BackupJob> {

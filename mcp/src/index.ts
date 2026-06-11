@@ -160,6 +160,38 @@ function buildServer(): McpServer {
     }
   );
 
+  server.tool(
+    "nodes_append",
+    "Append content to an existing document without resending the whole body. Ideal for writing large docs chunk by chunk — avoids the token cost of resending the full content. An optional separator (default: two newlines) is inserted between the existing content and the new chunk.",
+    {
+      node_id: z.string().describe("ID of the document to append to"),
+      content: z.string().describe("Markdown content to append"),
+      separator: z.string().optional().describe("Separator inserted between existing and new content (default: two newlines)"),
+    },
+    async ({ node_id, content, separator }) => {
+      const result = await api.appendNode(node_id, content, separator);
+      return { content: [{ type: "text", text: `Appended.\n${JSON.stringify(result, null, 2)}` }] };
+    }
+  );
+
+  server.tool(
+    "nodes_create_from_url",
+    "Create a new document whose content is fetched directly from a URL (e.g. a raw GitHub file, gist, or hosted HTML page). The server downloads the URL and stores its text as the node content — no need to pass the body through the LLM context.",
+    {
+      url: z.string().url().describe("URL to fetch the content from"),
+      name: z.string().describe("Node title"),
+      parent_id: z.string().optional().nullable().describe("Parent node ID"),
+      description: z.string().optional(),
+      tags: z.string().optional().describe("Comma-separated tags"),
+      accessibility: z.union([z.literal(0), z.literal(1), z.literal(2)]).describe("0=Public 1=Private 2=Unlisted"),
+      metadata: z.record(z.string(), z.any()).optional().describe("Optional metadata, e.g. {\"render\":\"html\"} to render as HTML page"),
+    },
+    async ({ url, ...payload }) => {
+      const node = await api.createNodeFromUrl(url, { role: 3, ...payload } as Parameters<typeof api.createNodeFromUrl>[1]);
+      return { content: [{ type: "text", text: `Node created from URL.\n${JSON.stringify(node, null, 2)}` }] };
+    }
+  );
+
   // BACKUP
   server.tool(
     "backup_start",
