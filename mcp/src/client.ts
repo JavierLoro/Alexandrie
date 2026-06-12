@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import compile from "./markdown/index.js";
 
 const BASE_URL = process.env.ALEXANDRIE_BASE_URL ?? "http://localhost:8201";
@@ -77,8 +78,19 @@ export interface BackupJob {
 }
 
 function getToken(): string {
+  // ALEXANDRIE_TOKEN_FILE permite rotar el token sin reiniciar el servicio:
+  // se lee en cada petición, así el cron de refresh solo reescribe el fichero.
+  const file = process.env.ALEXANDRIE_TOKEN_FILE;
+  if (file) {
+    try {
+      const token = readFileSync(file, "utf8").trim();
+      if (token) return token;
+    } catch {
+      // caer al env var si el fichero no existe o no es legible
+    }
+  }
   const token = process.env.ALEXANDRIE_TOKEN;
-  if (!token) throw new Error("ALEXANDRIE_TOKEN environment variable is not set");
+  if (!token) throw new Error("Neither ALEXANDRIE_TOKEN_FILE nor ALEXANDRIE_TOKEN is usable");
   return token;
 }
 
