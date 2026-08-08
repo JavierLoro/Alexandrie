@@ -387,6 +387,15 @@ async function startHttp(port: number, authToken: string | null) {
         res.end("ok\n");
         return;
       }
+
+      // Clients probe /.well-known/oauth-* at the domain root to discover OAuth.
+      // Answering 401 there reads as "this server speaks OAuth" and sends them
+      // into a client-registration flow that does not exist here, so say 404.
+      if (req.url?.startsWith("/.well-known/")) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "not_found" }));
+        return;
+      }
       if (!authorize(req, authToken)) {
         res.writeHead(401, { "Content-Type": "application/json" });
         res.end(
