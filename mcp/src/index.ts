@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -333,8 +335,71 @@ function writeSummary(node: unknown): string {
 
 // ── Transport selection ───────────────────────────────────────────────────────
 
-async function startHttp(port: number) {
+// Same rationale as ALEXANDRIE_TOKEN_FILE in client.ts: keep the secret in a
+// file so it can be rotated without touching the unit or the env file.
+function readAuthToken(): string | null {
+  const file = process.env.ALEXANDRIE_MCP_AUTH_TOKEN_FILE;
+  if (!file) return null;
+  try {
+    const token = readFileSync(file, "utf8").trim();
+    return token || null;
+  } catch (err) {
+    process.stderr.write(`Cannot read ALEXANDRIE_MCP_AUTH_TOKEN_FILE (${file}): ${err}\n`);
+    return null;
+  }
+}
+
+function tokensMatch(presented: string, expected: string): boolean {
+  const a = Buffer.from(presented);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+// Clients that only accept a bare URL (the Claude app without the request-header
+// beta, mobile, …) cannot send Authorization, so the token is also accepted as a
+// /t/<token>/ path prefix. The transport ignores the path, so we just strip it.
+const PATH_TOKEN = /^\/t\/([^/]+)(\/.*)?$/;
+
+function authorize(req: http.IncomingMessage, expected: string): boolean {
+  const header = req.headers.authorization;
+  if (header?.startsWith("Bearer ")) {
+    return tokensMatch(header.slice(7).trim(), expected);
+  }
+  const match = PATH_TOKEN.exec(req.url ?? "");
+  if (match) {
+    if (!tokensMatch(decodeURIComponent(match[1]), expected)) return false;
+    req.url = match[2] || "/";
+    return true;
+  }
+  return false;
+}
+
+async function startHttp(port: number, authToken: string | null) {
+  const host = process.env.ALEXANDRIE_MCP_HOST ?? "0.0.0.0";
+
   const httpServer = http.createServer(async (req, res) => {
+    if (authToken) {
+      // Unauthenticated on purpose: lets the tunnel and proxy be verified
+      // end to end without handing out the token.
+      if (req.method === "GET" && (req.url === "/healthz" || req.url === "/healthz/")) {
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        res.end("ok\n");
+        return;
+      }
+      if (!authorize(req, authToken)) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            error: { code: -32001, message: "Unauthorized" },
+            id: null,
+          })
+        );
+        return;
+      }
+    }
+
     const mcpServer = buildServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined, // stateless
@@ -343,8 +408,9 @@ async function startHttp(port: number) {
     await transport.handleRequest(req, res);
   });
 
-  await new Promise<void>((resolve) => httpServer.listen(port, "0.0.0.0", resolve));
-  process.stderr.write(`Alexandrie MCP server listening on http://0.0.0.0:${port}/\n`);
+  await new Promise<void>((resolve) => httpServer.listen(port, host, resolve));
+  const mode = authToken ? "token required" : "no auth";
+  process.stderr.write(`Alexandrie MCP server listening on http://${host}:${port}/ (${mode})\n`);
 }
 
 async function startStdio() {
@@ -358,9 +424,25 @@ async function main() {
   const useStdio = process.argv.includes("--stdio");
   if (useStdio) {
     await startStdio();
-  } else {
-    const port = parseInt(process.env.ALEXANDRIE_MCP_PORT ?? "8300", 10);
-    await startHttp(port);
+    return;
+  }
+
+  // Plain listener: unchanged, for LAN and tailnet clients.
+  const port = parseInt(process.env.ALEXANDRIE_MCP_PORT ?? "8300", 10);
+  await startHttp(port, null);
+
+  // Authenticated listener: only started when a token is actually configured,
+  // so the port can never exist without a secret in front of it.
+  const authPort = parseInt(process.env.ALEXANDRIE_MCP_AUTH_PORT ?? "", 10);
+  if (Number.isFinite(authPort)) {
+    const authToken = readAuthToken();
+    if (authToken) {
+      await startHttp(authPort, authToken);
+    } else {
+      process.stderr.write(
+        `ALEXANDRIE_MCP_AUTH_PORT=${authPort} set but no usable token; authenticated listener not started\n`
+      );
+    }
   }
 }
 
