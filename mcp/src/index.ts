@@ -4,14 +4,84 @@ import http from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import {
+  registerAppResource,
+  registerAppTool,
+  RESOURCE_MIME_TYPE,
+} from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
 import * as api from "./client.js";
 import { parseOutline, formatOutline, extractSection } from "./markdown-outline.js";
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
 
-function buildServer(): McpServer {
-  const server = new McpServer({ name: "alexandrie", version: "1.4.0" });
+type ServerProfile = "full" | "apps";
+
+const WIKI_BROWSER_URI = "ui://alexandrie/wiki-browser-v1.html";
+
+type WikiCard = {
+  id: string;
+  name: string;
+  description?: string;
+  tags?: string;
+  role?: number;
+  accessibility?: number;
+  updated_timestamp?: number;
+  excerpt?: string;
+};
+
+function unwrapResult(value: unknown): unknown {
+  return (value as { result?: unknown })?.result ?? value;
+}
+
+function unwrapNode(value: unknown): Record<string, unknown> {
+  const result = unwrapResult(value) as { node?: unknown } | unknown;
+  return (((result as { node?: unknown })?.node ?? result) || {}) as Record<string, unknown>;
+}
+
+function unwrapNodes(value: unknown): Array<Record<string, unknown>> {
+  const result = unwrapResult(value);
+  return Array.isArray(result) ? (result as Array<Record<string, unknown>>) : [];
+}
+
+function toWikiCard(node: Record<string, unknown>): WikiCard {
+  const snippet = typeof node.content_snippet === "string"
+    ? node.content_snippet
+    : typeof node.content === "string"
+      ? node.content.slice(0, 420)
+      : undefined;
+  return {
+    id: String(node.id ?? ""),
+    name: String(node.name ?? "Untitled"),
+    description: typeof node.description === "string" ? node.description : undefined,
+    tags: typeof node.tags === "string" ? node.tags : undefined,
+    role: typeof node.role === "number" ? node.role : undefined,
+    accessibility: typeof node.accessibility === "number" ? node.accessibility : undefined,
+    updated_timestamp: typeof node.updated_timestamp === "number" ? node.updated_timestamp : undefined,
+    excerpt: snippet?.replace(/\s+/g, " ").trim(),
+  };
+}
+
+async function findWikiCards(query: string | undefined, limit: number): Promise<WikiCard[]> {
+  const raw = query?.trim()
+    ? await api.searchNodes(query.trim(), true, limit)
+    : await api.listNodes();
+  return unwrapNodes(raw)
+    .filter((node) => node.id != null && node.name != null)
+    .slice(0, limit)
+    .map(toWikiCard);
+}
+
+function buildServer(profile: ServerProfile = "full"): McpServer {
+  const server = new McpServer(
+    { name: profile === "apps" ? "alexandrie-wiki" : "alexandrie", version: "1.5.0" },
+    {
+      instructions:
+        profile === "apps"
+          ? "Use search and outline tools before reading full documents. This profile is read-only. Use render_wiki_browser when a visual result helps the user browse or inspect wiki documents."
+          : "Use nodes_find_refs or nodes_search first, then nodes_outline, then nodes_get with a heading. Confirm identifiers before writes and never reveal credentials.",
+    }
+  );
 
   // AUTH
 
@@ -30,7 +100,7 @@ function writeSummary(node: unknown): string {
   return JSON.stringify(summary, null, 2);
 }
 
-  server.tool(
+  if (profile === "full") server.tool(
     "auth_login",
     "Login to Alexandrie and obtain an access token. For normal operations prefer the ALEXANDRIE_TOKEN env var.",
     {
@@ -44,14 +114,18 @@ function writeSummary(node: unknown): string {
   );
 
   // NODES
-  server.tool(
+  server.registerTool(
     "nodes_list",
-    "List nodes (workspaces, categories, documents). By default lists the whole tree of the authenticated user; use parent_id to list only one branch (recursive=false for direct children only) and role to filter by node type. Null/empty fields are omitted from the output.",
     {
-      user_id: z.string().optional().describe("User ID whose nodes to retrieve (omit for current user)"),
-      parent_id: z.string().optional().describe("Only nodes under this node (children, or whole subtree with recursive)"),
-      recursive: z.boolean().optional().describe("With parent_id: include the full subtree (default true). false = direct children only."),
-      role: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional().describe("Filter by type: 1=workspace 2=category 3=document"),
+      title: "List Alexandrie nodes",
+      description: "List nodes (workspaces, categories, documents). By default lists the whole tree of the authenticated user; use parent_id to list only one branch (recursive=false for direct children only) and role to filter by node type. Null/empty fields are omitted from the output.",
+      inputSchema: {
+        user_id: z.string().optional().describe("User ID whose nodes to retrieve (omit for current user)"),
+        parent_id: z.string().optional().describe("Only nodes under this node (children, or whole subtree with recursive)"),
+        recursive: z.boolean().optional().describe("With parent_id: include the full subtree (default true). false = direct children only."),
+        role: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional().describe("Filter by type: 1=workspace 2=category 3=document"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ user_id, parent_id, recursive, role }) => {
       const res = (await api.listNodes(user_id)) as { result?: unknown } | unknown[];
@@ -97,12 +171,16 @@ function writeSummary(node: unknown): string {
     }
   );
 
-  server.tool(
+  server.registerTool(
     "nodes_get",
-    "Get a single node by ID. Pass heading to fetch only one section of the document (much cheaper than the full content). If the heading does not exist, the error includes the document outline. Use nodes_outline first to discover the structure.",
     {
-      node_id: z.string().describe("Node ID"),
-      heading: z.string().optional().describe("Return only this section, e.g. \"## Deploy\" (case-insensitive, '#' optional)"),
+      title: "Get Alexandrie node",
+      description: "Get a single node by ID. Pass heading to fetch only one section of the document (much cheaper than the full content). If the heading does not exist, the error includes the document outline. Use nodes_outline first to discover the structure.",
+      inputSchema: {
+        node_id: z.string().describe("Node ID"),
+        heading: z.string().optional().describe("Return only this section, e.g. \"## Deploy\" (case-insensitive, '#' optional)"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ node_id, heading }) => {
       const node = await api.getNode(node_id);
@@ -123,12 +201,16 @@ function writeSummary(node: unknown): string {
     }
   );
 
-  server.tool(
+  server.registerTool(
     "nodes_outline",
-    "Get the heading structure (table of contents) of a document without its body — a few hundred bytes instead of the full content. With descriptive=true, includes the per-section one-line summaries auto-generated by the wiki agent (metadata.index), when available.",
     {
-      node_id: z.string().describe("Node ID"),
-      descriptive: z.boolean().optional().describe("Include per-section summaries from metadata.index (default false)"),
+      title: "Outline Alexandrie document",
+      description: "Get the heading structure (table of contents) of a document without its body — a few hundred bytes instead of the full content. With descriptive=true, includes the per-section one-line summaries auto-generated by the wiki agent (metadata.index), when available.",
+      inputSchema: {
+        node_id: z.string().describe("Node ID"),
+        descriptive: z.boolean().optional().describe("Include per-section summaries from metadata.index (default false)"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ node_id, descriptive }) => {
       const node = await api.getNode(node_id);
@@ -162,13 +244,17 @@ function writeSummary(node: unknown): string {
     }
   );
 
-  server.tool(
+  server.registerTool(
     "nodes_search",
-    "Search nodes by title/tags/description. For finding project or service references with content context, prefer nodes_find_refs instead. Use search_content=true to also search bodies and receive content_snippet excerpts.",
     {
-      q: z.string().describe("Search query"),
-      search_content: z.boolean().optional().describe("Also search inside Markdown content (default: false)"),
-      limit: z.number().int().min(1).max(100).optional().describe("Max results (default: 20)"),
+      title: "Search Alexandrie nodes",
+      description: "Search nodes by title/tags/description. For finding project or service references with content context, prefer nodes_find_refs instead. Use search_content=true to also search bodies and receive content_snippet excerpts.",
+      inputSchema: {
+        q: z.string().describe("Search query"),
+        search_content: z.boolean().optional().describe("Also search inside Markdown content (default: false)"),
+        limit: z.number().int().min(1).max(100).optional().describe("Max results (default: 20)"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ q, search_content, limit }) => {
       const nodes = await api.searchNodes(q, search_content, limit);
@@ -176,12 +262,16 @@ function writeSummary(node: unknown): string {
     }
   );
 
-  server.tool(
+  server.registerTool(
     "nodes_find_refs",
-    "Search document BODY content and return matching nodes with excerpts. Use this when looking for context about a project, service, CT, or topic — it tells you which wiki docs are relevant without needing to read them fully.",
     {
-      q: z.string().describe("Topic, service name, or keyword to find in document bodies"),
-      limit: z.number().int().min(1).max(20).optional().describe("Max results (default: 10)"),
+      title: "Find Alexandrie references",
+      description: "Search document BODY content and return matching nodes with excerpts. Use this when looking for context about a project, service, CT, or topic — it tells you which wiki docs are relevant without needing to read them fully.",
+      inputSchema: {
+        q: z.string().describe("Topic, service name, or keyword to find in document bodies"),
+        limit: z.number().int().min(1).max(20).optional().describe("Max results (default: 10)"),
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ q, limit }) => {
       const raw = await api.searchNodes(q, true, limit ?? 10) as {
@@ -199,8 +289,148 @@ function writeSummary(node: unknown): string {
     }
   );
 
-  server.tool(
-    "nodes_create",
+  if (profile === "apps") {
+    const wikiBrowserHtml = readFileSync(
+      new URL("../ui/wiki-browser.html", import.meta.url),
+      "utf8"
+    );
+
+    registerAppResource(
+      server,
+      "Alexandrie wiki browser",
+      WIKI_BROWSER_URI,
+      {
+        description: "Interactive, read-only browser for Alexandrie documents.",
+        _meta: { ui: { prefersBorder: true } },
+      },
+      async () => ({
+        contents: [
+          {
+            uri: WIKI_BROWSER_URI,
+            mimeType: RESOURCE_MIME_TYPE,
+            text: wikiBrowserHtml,
+            _meta: { ui: { prefersBorder: true } },
+          },
+        ],
+      })
+    );
+
+    registerAppTool(
+      server,
+      "render_wiki_browser",
+      {
+        title: "Browse Alexandrie",
+        description:
+          "Show an interactive, read-only Alexandrie browser. Use a query to show relevant documents, or omit it to show a compact overview.",
+        inputSchema: {
+          query: z.string().max(200).optional().describe("Search terms for wiki titles and document bodies"),
+          limit: z.number().int().min(1).max(20).optional().describe("Maximum documents to show (default 12)"),
+        },
+        outputSchema: {
+          view: z.literal("list"),
+          query: z.string(),
+          documents: z.array(
+            z.object({
+              id: z.string(),
+              name: z.string(),
+              description: z.string().optional(),
+              tags: z.string().optional(),
+              role: z.number().optional(),
+              accessibility: z.number().optional(),
+              updated_timestamp: z.number().optional(),
+              excerpt: z.string().optional(),
+            })
+          ),
+        },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          openWorldHint: false,
+        },
+        _meta: {
+          ui: { resourceUri: WIKI_BROWSER_URI },
+          "openai/toolInvocation/invoking": "Buscando en Alexandrie…",
+          "openai/toolInvocation/invoked": "Resultados de Alexandrie listos.",
+        },
+      },
+      async ({ query, limit }) => {
+        const documents = await findWikiCards(query, limit ?? 12);
+        const structuredContent = {
+          view: "list" as const,
+          query: query?.trim() ?? "",
+          documents,
+        };
+        return {
+          structuredContent,
+          content: [
+            {
+              type: "text",
+              text: documents.length
+                ? `Found ${documents.length} Alexandrie documents${structuredContent.query ? ` for "${structuredContent.query}"` : ""}.`
+                : `No Alexandrie documents found${structuredContent.query ? ` for "${structuredContent.query}"` : ""}.`,
+            },
+          ],
+        };
+      }
+    );
+
+    registerAppTool(
+      server,
+      "render_wiki_document",
+      {
+        title: "Open Alexandrie document",
+        description: "Open one Alexandrie document in the interactive read-only viewer by its exact node ID.",
+        inputSchema: {
+          node_id: z.string().min(1).describe("Exact Alexandrie node ID"),
+        },
+        outputSchema: {
+          view: z.literal("document"),
+          document: z.object({
+            id: z.string(),
+            name: z.string(),
+            description: z.string().optional(),
+            tags: z.string().optional(),
+            content: z.string(),
+            updated_timestamp: z.number().optional(),
+          }),
+        },
+        annotations: {
+          readOnlyHint: true,
+          destructiveHint: false,
+          openWorldHint: false,
+        },
+        _meta: {
+          ui: { resourceUri: WIKI_BROWSER_URI },
+          "openai/toolInvocation/invoking": "Abriendo documento…",
+          "openai/toolInvocation/invoked": "Documento abierto.",
+        },
+      },
+      async ({ node_id }) => {
+        const node = unwrapNode(await api.getNode(node_id));
+        const document = {
+          id: String(node.id ?? node_id),
+          name: String(node.name ?? "Untitled"),
+          description: typeof node.description === "string" ? node.description : undefined,
+          tags: typeof node.tags === "string" ? node.tags : undefined,
+          content: typeof node.content === "string" ? node.content : "",
+          updated_timestamp: typeof node.updated_timestamp === "number" ? node.updated_timestamp : undefined,
+        };
+        return {
+          structuredContent: { view: "document" as const, document },
+          content: [
+            {
+              type: "text",
+              text: `Opened Alexandrie document "${document.name}" (${document.id}).`,
+            },
+          ],
+        };
+      }
+    );
+  }
+
+  if (profile === "full") {
+    server.tool(
+      "nodes_create",
     "Create a new node. role: 1=workspace 2=category 3=document. accessibility: 0=Public 1=Private 2=Unlisted.",
     {
       name: z.string().describe("Node title (required)"),
@@ -329,6 +559,7 @@ function writeSummary(node: unknown): string {
       return { content: [{ type: "text", text: JSON.stringify(job, null, 2) }] };
     }
   );
+  }
 
   return server;
 }
@@ -337,14 +568,14 @@ function writeSummary(node: unknown): string {
 
 // Same rationale as ALEXANDRIE_TOKEN_FILE in client.ts: keep the secret in a
 // file so it can be rotated without touching the unit or the env file.
-function readAuthToken(): string | null {
-  const file = process.env.ALEXANDRIE_MCP_AUTH_TOKEN_FILE;
+function readTokenFile(envName: "ALEXANDRIE_MCP_AUTH_TOKEN_FILE" | "ALEXANDRIE_MCP_APPS_TOKEN_FILE"): string | null {
+  const file = process.env[envName];
   if (!file) return null;
   try {
     const token = readFileSync(file, "utf8").trim();
     return token || null;
   } catch (err) {
-    process.stderr.write(`Cannot read ALEXANDRIE_MCP_AUTH_TOKEN_FILE (${file}): ${err}\n`);
+    process.stderr.write(`Cannot read ${envName} (${file}): ${err}\n`);
     return null;
   }
 }
@@ -360,25 +591,37 @@ function tokensMatch(presented: string, expected: string): boolean {
 // beta, mobile, …) cannot send Authorization, so the token is also accepted as a
 // /t/<token>/ path prefix. The transport ignores the path, so we just strip it.
 const PATH_TOKEN = /^\/t\/([^/]+)(\/.*)?$/;
+const APPS_PATH_TOKEN = /^\/apps\/t\/([^/]+)(\/.*)?$/;
 
-function authorize(req: http.IncomingMessage, expected: string): boolean {
+function authorize(
+  req: http.IncomingMessage,
+  fullToken: string,
+  appsToken: string | null
+): ServerProfile | null {
+  const appsMatch = APPS_PATH_TOKEN.exec(req.url ?? "");
+  if (appsMatch) {
+    if (!appsToken || !tokensMatch(decodeURIComponent(appsMatch[1]), appsToken)) return null;
+    req.url = appsMatch[2] || "/mcp";
+    return "apps";
+  }
   const header = req.headers.authorization;
   if (header?.startsWith("Bearer ")) {
-    return tokensMatch(header.slice(7).trim(), expected);
+    return tokensMatch(header.slice(7).trim(), fullToken) ? "full" : null;
   }
   const match = PATH_TOKEN.exec(req.url ?? "");
   if (match) {
-    if (!tokensMatch(decodeURIComponent(match[1]), expected)) return false;
+    if (!tokensMatch(decodeURIComponent(match[1]), fullToken)) return null;
     req.url = match[2] || "/";
-    return true;
+    return "full";
   }
-  return false;
+  return null;
 }
 
-async function startHttp(port: number, authToken: string | null) {
+async function startHttp(port: number, authToken: string | null, appsToken: string | null = null) {
   const host = process.env.ALEXANDRIE_MCP_HOST ?? "0.0.0.0";
 
   const httpServer = http.createServer(async (req, res) => {
+    let profile: ServerProfile = "full";
     if (authToken) {
       // Unauthenticated on purpose: lets the tunnel and proxy be verified
       // end to end without handing out the token.
@@ -396,7 +639,8 @@ async function startHttp(port: number, authToken: string | null) {
         res.end(JSON.stringify({ error: "not_found" }));
         return;
       }
-      if (!authorize(req, authToken)) {
+      const authorizedProfile = authorize(req, authToken, appsToken);
+      if (!authorizedProfile) {
         res.writeHead(401, { "Content-Type": "application/json" });
         res.end(
           JSON.stringify({
@@ -407,9 +651,10 @@ async function startHttp(port: number, authToken: string | null) {
         );
         return;
       }
+      profile = authorizedProfile;
     }
 
-    const mcpServer = buildServer();
+    const mcpServer = buildServer(profile);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined, // stateless
     });
@@ -418,7 +663,9 @@ async function startHttp(port: number, authToken: string | null) {
   });
 
   await new Promise<void>((resolve) => httpServer.listen(port, host, resolve));
-  const mode = authToken ? "token required" : "no auth";
+  const mode = authToken
+    ? `token required${appsToken ? "; separate Apps token enabled" : ""}`
+    : "no auth";
   process.stderr.write(`Alexandrie MCP server listening on http://${host}:${port}/ (${mode})\n`);
 }
 
@@ -444,9 +691,16 @@ async function main() {
   // so the port can never exist without a secret in front of it.
   const authPort = parseInt(process.env.ALEXANDRIE_MCP_AUTH_PORT ?? "", 10);
   if (Number.isFinite(authPort)) {
-    const authToken = readAuthToken();
+    const authToken = readTokenFile("ALEXANDRIE_MCP_AUTH_TOKEN_FILE");
     if (authToken) {
-      await startHttp(authPort, authToken);
+      let appsToken = readTokenFile("ALEXANDRIE_MCP_APPS_TOKEN_FILE");
+      if (appsToken && tokensMatch(appsToken, authToken)) {
+        process.stderr.write(
+          "ALEXANDRIE_MCP_APPS_TOKEN_FILE must not contain the full-access token; Apps profile disabled\n"
+        );
+        appsToken = null;
+      }
+      await startHttp(authPort, authToken, appsToken);
     } else {
       process.stderr.write(
         `ALEXANDRIE_MCP_AUTH_PORT=${authPort} set but no usable token; authenticated listener not started\n`

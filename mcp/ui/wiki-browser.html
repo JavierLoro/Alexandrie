@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alexandrie</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --paper: #f7f6ff;
+        --paper-raised: #ffffff;
+        --ink: #171a2f;
+        --muted: #656983;
+        --line: #dcdcf0;
+        --cobalt: #5156d8;
+        --cobalt-deep: #343993;
+        --mint: #88d6bd;
+        --coral: #ec7b6e;
+        --shadow: 0 16px 40px rgba(35, 39, 94, 0.12);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --paper: #101327;
+          --paper-raised: #181c36;
+          --ink: #f4f3ff;
+          --muted: #aaaeca;
+          --line: #303654;
+          --cobalt: #8d91ff;
+          --cobalt-deep: #b8baff;
+          --mint: #72cdb0;
+          --coral: #f28b80;
+          --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+        }
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(90deg, color-mix(in srgb, var(--cobalt) 8%, transparent) 1px, transparent 1px) 0 0 / 28px 28px,
+          var(--paper);
+        color: var(--ink);
+        font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      button, input { font: inherit; }
+
+      .shell {
+        width: min(100%, 920px);
+        margin: 0 auto;
+        padding: 18px;
+      }
+
+      .masthead {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 14px;
+        align-items: center;
+        margin-bottom: 18px;
+      }
+
+      .mark {
+        width: 50px;
+        height: 58px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 4px 13px 13px 4px;
+        background: var(--cobalt);
+        color: white;
+        box-shadow: 5px 5px 0 color-mix(in srgb, var(--mint) 72%, transparent);
+        font: 700 27px/1 Georgia, "Times New Roman", serif;
+      }
+
+      h1, h2, h3 {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        letter-spacing: -0.025em;
+      }
+
+      h1 { font-size: clamp(25px, 5vw, 38px); line-height: 1; }
+      .eyebrow { color: var(--cobalt-deep); font: 700 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; }
+      .subtitle { margin: 5px 0 0; color: var(--muted); }
+
+      .search {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        margin-bottom: 18px;
+      }
+
+      .search input {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 11px 13px;
+        background: var(--paper-raised);
+        color: var(--ink);
+        outline: none;
+      }
+
+      .search input:focus { border-color: var(--cobalt); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cobalt) 18%, transparent); }
+
+      .action {
+        border: 0;
+        border-radius: 10px;
+        padding: 10px 16px;
+        background: var(--cobalt);
+        color: white;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      .action:hover { background: var(--cobalt-deep); }
+      .action:focus-visible, .card:focus-visible, .back:focus-visible { outline: 3px solid color-mix(in srgb, var(--mint) 75%, transparent); outline-offset: 3px; }
+      .action:disabled { cursor: wait; opacity: .62; }
+
+      .results-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .results-head strong { font-family: Georgia, "Times New Roman", serif; font-size: 18px; }
+      .count { color: var(--muted); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+      .shelf { display: grid; gap: 9px; }
+
+      .card {
+        position: relative;
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 5px 13px 13px 5px;
+        padding: 14px 16px 14px 22px;
+        background: var(--paper-raised);
+        color: var(--ink);
+        text-align: left;
+        cursor: pointer;
+        box-shadow: 0 3px 0 color-mix(in srgb, var(--line) 60%, transparent);
+        transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: -1px auto -1px -1px;
+        width: 7px;
+        border-radius: 5px 0 0 5px;
+        background: var(--spine, var(--cobalt));
+      }
+
+      .card:hover { transform: translateX(4px); border-color: color-mix(in srgb, var(--cobalt) 45%, var(--line)); box-shadow: var(--shadow); }
+      .card h3 { font-size: 18px; line-height: 1.2; }
+      .card p { margin: 7px 0 0; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+      .meta { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 9px; color: var(--muted); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .tag { color: var(--cobalt-deep); }
+
+      .empty, .error {
+        padding: 22px;
+        border: 1px dashed var(--line);
+        border-radius: 12px;
+        background: var(--paper-raised);
+        color: var(--muted);
+      }
+
+      .error { border-color: var(--coral); color: var(--ink); }
+
+      .document {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--paper-raised);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .document-head { padding: 20px 22px; background: linear-gradient(125deg, color-mix(in srgb, var(--cobalt) 16%, var(--paper-raised)), var(--paper-raised)); border-bottom: 1px solid var(--line); }
+      .document-head h2 { margin-top: 6px; font-size: clamp(25px, 5vw, 37px); line-height: 1.08; }
+      .document-head p { margin: 8px 0 0; color: var(--muted); }
+      .document-body { padding: 22px; }
+      .document-body h1, .document-body h2, .document-body h3 { margin: 1.25em 0 .5em; }
+      .document-body h1:first-child, .document-body h2:first-child { margin-top: 0; }
+      .document-body p { margin: .65em 0; white-space: pre-wrap; }
+      .document-body li { margin: .3em 0; }
+      .document-body code { padding: 2px 5px; border-radius: 5px; background: color-mix(in srgb, var(--cobalt) 10%, var(--paper)); font: .88em ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .document-body pre { overflow-x: auto; padding: 14px; border-radius: 10px; background: color-mix(in srgb, var(--ink) 7%, var(--paper)); white-space: pre-wrap; }
+
+      .back { border: 0; padding: 0; margin: 0 0 14px; background: transparent; color: var(--cobalt-deep); cursor: pointer; font-weight: 750; }
+      .status { min-height: 21px; color: var(--muted); font-size: 12px; margin-top: 10px; }
+
+      @media (max-width: 560px) {
+        .shell { padding: 14px; }
+        .search { grid-template-columns: 1fr; }
+        .action { width: 100%; }
+        .document-head, .document-body { padding: 17px; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <div class="mark" aria-hidden="true">A</div>
+        <div>
+          <div class="eyebrow">Archivo vivo · solo lectura</div>
+          <h1>Alexandrie</h1>
+          <p class="subtitle">Encuentra una nota, abre el documento, vuelve al hilo.</p>
+        </div>
+      </header>
+
+      <section id="browser">
+        <form class="search" id="search-form">
+          <input id="search-input" name="query" type="search" maxlength="200" autocomplete="off" placeholder="Busca un proyecto, servicio o decisión…" aria-label="Buscar en Alexandrie" />
+          <button class="action" id="search-button" type="submit">Buscar en la wiki</button>
+        </form>
+        <div id="results"></div>
+      </section>
+      <section id="reader" hidden></section>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+    </main>
+
+    <script>
+      (() => {
+        const pending = new Map();
+        let nextId = 1;
+        let lastList = null;
+        const browser = document.getElementById("browser");
+        const reader = document.getElementById("reader");
+        const results = document.getElementById("results");
+        const status = document.getElementById("status");
+        const form = document.getElementById("search-form");
+        const input = document.getElementById("search-input");
+        const button = document.getElementById("search-button");
+
+        function request(method, params) {
+          const id = nextId++;
+          window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
+          return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+        }
+
+        async function callTool(name, args) {
+          if (window.openai && typeof window.openai.callTool === "function") {
+            return window.openai.callTool(name, args);
+          }
+          return request("tools/call", { name, arguments: args });
+        }
+
+        function element(tag, className, text) {
+          const node = document.createElement(tag);
+          if (className) node.className = className;
+          if (text !== undefined) node.textContent = text;
+          return node;
+        }
+
+        function formatDate(timestamp) {
+          if (!timestamp) return "";
+          const date = new Date(timestamp > 1e12 ? timestamp : timestamp * 1000);
+          return new Intl.DateTimeFormat(document.documentElement.lang || "es", { dateStyle: "medium" }).format(date);
+        }
+
+        function roleLabel(role) {
+          return role === 1 ? "Espacio" : role === 2 ? "Categoría" : "Documento";
+        }
+
+        function renderList(data) {
+          lastList = data;
+          reader.hidden = true;
+          browser.hidden = false;
+          input.value = data.query || "";
+          results.replaceChildren();
+
+          const head = element("div", "results-head");
+          head.append(element("strong", "", data.query ? "Coincidencias" : "Una vista del archivo"));
+          head.append(element("span", "count", String((data.documents || []).length) + " entradas"));
+          results.append(head);
+
+          if (!data.documents || data.documents.length === 0) {
+            results.append(element("div", "empty", "No hay resultados. Prueba con menos palabras o con el nombre del proyecto."));
+            return;
+          }
+
+          const shelf = element("div", "shelf");
+          data.documents.forEach((doc, index) => {
+            const card = element("button", "card");
+            card.type = "button";
+            card.style.setProperty("--spine", index % 3 === 0 ? "var(--cobalt)" : index % 3 === 1 ? "var(--mint)" : "var(--coral)");
+            card.append(element("h3", "", doc.name));
+            if (doc.description || doc.excerpt) card.append(element("p", "", doc.description || doc.excerpt));
+            const meta = element("div", "meta");
+            meta.append(element("span", "", roleLabel(doc.role)));
+            if (doc.tags) meta.append(element("span", "tag", doc.tags));
+            if (doc.updated_timestamp) meta.append(element("span", "", formatDate(doc.updated_timestamp)));
+            meta.append(element("span", "", "#" + doc.id));
+            card.append(meta);
+            card.addEventListener("click", () => openDocument(doc.id));
+            shelf.append(card);
+          });
+          results.append(shelf);
+        }
+
+        function appendInline(parent, text) {
+          const parts = text.split(/(`[^`]+`)/g);
+          parts.forEach((part) => {
+            if (part.startsWith("`") && part.endsWith("`")) parent.append(element("code", "", part.slice(1, -1)));
+            else parent.append(document.createTextNode(part));
+          });
+        }
+
+        function renderMarkdown(source) {
+          const fragment = document.createDocumentFragment();
+          let list = null;
+          let code = null;
+          String(source || "").split(/\r?\n/).forEach((line) => {
+            if (line.startsWith("```")) {
+              if (code) { fragment.append(code); code = null; }
+              else code = element("pre", "");
+              list = null;
+              return;
+            }
+            if (code) { code.textContent += (code.textContent ? "\n" : "") + line; return; }
+            const heading = /^(#{1,3})\s+(.+)$/.exec(line);
+            if (heading) {
+              list = null;
+              const h = element("h" + heading[1].length, "");
+              appendInline(h, heading[2]);
+              fragment.append(h);
+              return;
+            }
+            const item = /^[-*]\s+(.+)$/.exec(line);
+            if (item) {
+              if (!list) { list = element("ul", ""); fragment.append(list); }
+              const li = element("li", ""); appendInline(li, item[1]); list.append(li); return;
+            }
+            list = null;
+            if (!line.trim()) return;
+            const p = element("p", ""); appendInline(p, line); fragment.append(p);
+          });
+          if (code) fragment.append(code);
+          return fragment;
+        }
+
+        function renderDocument(data) {
+          const doc = data.document;
+          browser.hidden = true;
+          reader.hidden = false;
+          reader.replaceChildren();
+          const back = element("button", "back", "← Volver a resultados");
+          back.type = "button";
+          back.addEventListener("click", () => renderList(lastList || { view: "list", query: "", documents: [] }));
+          reader.append(back);
+          const article = element("article", "document");
+          const head = element("header", "document-head");
+          head.append(element("div", "eyebrow", "Documento · #" + doc.id));
+          head.append(element("h2", "", doc.name));
+          if (doc.description) head.append(element("p", "", doc.description));
+          if (doc.tags) head.append(element("div", "meta tag", doc.tags));
+          const body = element("div", "document-body");
+          body.append(renderMarkdown(doc.content));
+          article.append(head, body);
+          reader.append(article);
+        }
+
+        function render(data) {
+          if (!data || !data.view) return;
+          status.textContent = "";
+          if (data.view === "document") renderDocument(data);
+          else renderList(data);
+        }
+
+        async function openDocument(nodeId) {
+          status.textContent = "Abriendo documento…";
+          try {
+            const result = await callTool("render_wiki_document", { node_id: nodeId });
+            render(result && result.structuredContent);
+          } catch (error) {
+            status.textContent = "No se pudo abrir el documento. " + (error && error.message ? error.message : "Inténtalo de nuevo.");
+          }
+        }
+
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          button.disabled = true;
+          status.textContent = "Buscando…";
+          try {
+            const result = await callTool("render_wiki_browser", { query: input.value.trim(), limit: 12 });
+            render(result && result.structuredContent);
+          } catch (error) {
+            results.replaceChildren(element("div", "error", "La búsqueda no respondió. Comprueba la conexión con Alexandrie e inténtalo de nuevo."));
+            status.textContent = error && error.message ? error.message : "";
+          } finally {
+            button.disabled = false;
+          }
+        });
+
+        window.addEventListener("message", (event) => {
+          if (event.source !== window.parent) return;
+          const message = event.data;
+          if (!message || message.jsonrpc !== "2.0") return;
+          if (message.id !== undefined && pending.has(message.id)) {
+            const handler = pending.get(message.id);
+            pending.delete(message.id);
+            if (message.error) handler.reject(message.error);
+            else handler.resolve(message.result);
+            return;
+          }
+          if (message.method === "ui/notifications/tool-result") {
+            render(message.params && message.params.structuredContent);
+          }
+        }, { passive: true });
+
+        if (window.openai && window.openai.toolOutput) render(window.openai.toolOutput);
+      })();
+    </script>
+  </body>
+</html>
