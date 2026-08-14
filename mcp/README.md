@@ -30,6 +30,9 @@ claude mcp add alexandrie --transport http http://<host>:8300/
 | `ALEXANDRIE_TOKEN` | — | Auth token (static) |
 | `ALEXANDRIE_TOKEN_FILE` | — | Path to a file containing the token; re-read on each request, so the token can be rotated **without restarting** the server |
 | `ALEXANDRIE_MCP_PORT` | `8300` | HTTP listen port |
+| `ALEXANDRIE_MCP_AUTH_PORT` | — | Optional authenticated listener; requires `ALEXANDRIE_MCP_AUTH_TOKEN_FILE` |
+| `ALEXANDRIE_MCP_AUTH_TOKEN_FILE` | — | Full-access token file for the authenticated listener |
+| `ALEXANDRIE_MCP_APPS_TOKEN_FILE` | — | Separate read-only token file that enables the Apps profile |
 
 CLI flags: `--stdio` to use stdio transport instead of HTTP.
 
@@ -63,6 +66,38 @@ CLI flags: `--stdio` to use stdio transport instead of HTTP.
 | `auth_login` | Log in and obtain a token |
 | `backup_start` / `backup_status` | Trigger and monitor the async backup |
 
+## ChatGPT / MCP Apps profile
+
+The authenticated listener also exposes a separate **read-only** Apps profile at:
+
+```text
+https://<host>/apps/t/<apps-token>/mcp
+```
+
+This profile advertises only the five read/navigation tools plus:
+
+| Tool | What it does |
+| :--- | :--- |
+| `render_wiki_browser` | Search or browse documents in an interactive MCP Apps view |
+| `render_wiki_document` | Open one document in the interactive read-only viewer |
+
+The Apps UI is served as `text/html;profile=mcp-app` from
+`ui://alexandrie/wiki-browser-v1.html`. The legacy `/t/<shared-token>/` route keeps
+the full tool set unchanged. The Apps token must be different from the
+full-access token; the server disables the Apps profile if both files contain
+the same value. An Apps token is rejected on the legacy full-access route.
+
+For development in ChatGPT, enable developer mode and register the Apps-profile
+URL as an MCP connection. The token comes from the secure file referenced by
+`ALEXANDRIE_MCP_APPS_TOKEN_FILE`; never copy it into the repo or wiki. Then
+place the registered connection ID in
+`plugins/alexandrie-wiki/.app.json` under `apps.alexandrie.id` before installing
+the packaged plugin. Do not commit or paste the token.
+
+The shared-token route is suitable for personal development only. A publishable
+plugin that exposes private wiki data must replace it with MCP-compliant OAuth
+2.1 discovery, PKCE and per-user authorization.
+
 ## Design notes
 
 - **Token funnel**: the tools are designed to minimize agent context usage. Use them as a funnel: `nodes_find_refs` / `nodes_search` to locate documents → `nodes_outline` to see structure → `nodes_get` with `heading` to read only the relevant section → `nodes_edit` to change only what's needed. Write tools do **not** echo the document content back.
@@ -78,5 +113,6 @@ mcp/
 │   ├── markdown-outline.ts   # heading-tree extraction for nodes_outline
 │   └── markdown/             # GENERATED from frontend — do not edit
 ├── scripts/sync-renderer.mjs # frontend → src/markdown/ sync (single source)
+├── ui/wiki-browser.html      # MCP Apps interactive read-only viewer
 └── dist/                     # tsc output (npm start)
 ```

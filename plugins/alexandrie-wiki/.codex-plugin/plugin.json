@@ -1,0 +1,29 @@
+{
+  "name": "alexandrie-wiki",
+  "version": "0.1.0",
+  "description": "Search, inspect and browse a private Alexandrie wiki from ChatGPT and Codex.",
+  "author": {
+    "name": "Javier Loro",
+    "url": "https://github.com/JavierLoro"
+  },
+  "homepage": "https://wiki.jlc-dev.me",
+  "repository": "https://github.com/JavierLoro/Alexandrie",
+  "license": "MIT",
+  "keywords": ["alexandrie", "wiki", "knowledge", "mcp", "chatgpt"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Alexandrie Wiki",
+    "shortDescription": "Search and read your Alexandrie knowledge base.",
+    "longDescription": "A read-only ChatGPT and Codex companion for finding references, inspecting document outlines and browsing Alexandrie in an interactive MCP Apps viewer.",
+    "developerName": "Javier Loro",
+    "category": "Productivity",
+    "capabilities": ["Search", "Read", "Interactive"],
+    "defaultPrompt": [
+      "Busca en Alexandrie la documentación sobre este tema.",
+      "Muéstrame un navegador visual de mi wiki.",
+      "Abre este documento de Alexandrie y resúmelo."
+    ],
+    "brandColor": "#5156D8"
+  },
+  "apps": "./.app.json"
+}
